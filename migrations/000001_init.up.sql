@@ -1,9 +1,13 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+DROP TYPE IF EXISTS file_status;
+CREATE TYPE file_status AS ENUM('created', 'uploaded');
+
 CREATE TABLE uploaded_files (
     id uuid PRIMARY KEY NOT NULL DEFAULT uuid_generate_v4(),
     name VARCHAR(200) NOT NULL UNIQUE,
     hash varchar(200) NOT NULL DEFAULT '',
+    status file_status NOT NULL DEFAULT 'created'::file_status,
     created_at timestamptz NOT NULL DEFAULT NOW(),
     updated_at timestamptz NOT NULL DEFAULT NOW()
 );

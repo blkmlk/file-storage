@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/blkmlk/file-storage/deps"
 	"github.com/blkmlk/file-storage/migrations"
 	"github.com/blkmlk/file-storage/services/storage"
@@ -47,4 +49,13 @@ func (t *testSuite) TestCreateFile() {
 
 	err := t.storage.CreateUploadedFile(ctx, &file)
 	t.Require().NoError(err)
+
+	err = t.storage.CreateUploadedFile(ctx, &file)
+	t.Require().ErrorIs(err, storage.ErrAlreadyExists)
+
+	err = t.storage.UpdateUploadedFileStatus(ctx, file.ID, "hash", storage.FileStatusUploaded)
+	t.Require().NoError(err)
+
+	err = t.storage.UpdateUploadedFileStatus(ctx, uuid.NewString(), "hash", storage.FileStatusUploaded)
+	t.Require().ErrorIs(err, storage.ErrNotFound)
 }
