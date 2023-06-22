@@ -13,7 +13,7 @@ const (
 	FileStatusUploaded FileStatus = "uploaded"
 )
 
-type UploadedFile struct {
+type File struct {
 	ID        string
 	Name      string
 	Hash      string
@@ -22,9 +22,9 @@ type UploadedFile struct {
 	UpdatedAt time.Time
 }
 
-func NewUploadedFile(name string) UploadedFile {
+func NewFile(name string) File {
 	now := time.Now().UTC()
-	return UploadedFile{
+	return File{
 		ID:        uuid.NewString(),
 		Name:      name,
 		Hash:      "",

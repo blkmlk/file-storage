@@ -15,8 +15,8 @@ var (
 )
 
 type Storage interface {
-	CreateUploadedFile(ctx context.Context, file *UploadedFile) error
-	UpdateUploadedFileStatus(ctx context.Context, fileID string, hash string, status FileStatus) error
+	CreateFile(ctx context.Context, file *File) error
+	UpdateFileStatus(ctx context.Context, fileID string, hash string, status FileStatus) error
 }
 
 type storage struct {
@@ -31,7 +31,7 @@ func New(db *gorm.DB) Storage {
 	return s
 }
 
-func (s storage) CreateUploadedFile(ctx context.Context, file *UploadedFile) error {
+func (s storage) CreateFile(ctx context.Context, file *File) error {
 	tx := s.db.WithContext(ctx).Create(file)
 	if tx.Error != nil {
 		if e, ok := tx.Error.(*pgconn.PgError); ok && e.Code == "23505" {
@@ -42,8 +42,8 @@ func (s storage) CreateUploadedFile(ctx context.Context, file *UploadedFile) err
 	return nil
 }
 
-func (s storage) UpdateUploadedFileStatus(ctx context.Context, fileID string, hash string, status FileStatus) error {
-	tx := s.db.WithContext(ctx).Table("uploaded_files").Where("id = ?", fileID).
+func (s storage) UpdateFileStatus(ctx context.Context, fileID string, hash string, status FileStatus) error {
+	tx := s.db.WithContext(ctx).Table("files").Where("id = ?", fileID).
 		Updates(map[string]any{
 			"hash":   hash,
 			"status": status,

@@ -45,17 +45,17 @@ func (t *testSuite) SetupTest() {
 
 func (t *testSuite) TestCreateFile() {
 	ctx := context.Background()
-	file := storage.NewUploadedFile("test")
+	file := storage.NewFile("test")
 
-	err := t.storage.CreateUploadedFile(ctx, &file)
+	err := t.storage.CreateFile(ctx, &file)
 	t.Require().NoError(err)
 
-	err = t.storage.CreateUploadedFile(ctx, &file)
+	err = t.storage.CreateFile(ctx, &file)
 	t.Require().ErrorIs(err, storage.ErrAlreadyExists)
 
-	err = t.storage.UpdateUploadedFileStatus(ctx, file.ID, "hash", storage.FileStatusUploaded)
+	err = t.storage.UpdateFileStatus(ctx, file.ID, "hash", storage.FileStatusUploaded)
 	t.Require().NoError(err)
 
-	err = t.storage.UpdateUploadedFileStatus(ctx, uuid.NewString(), "hash", storage.FileStatusUploaded)
+	err = t.storage.UpdateFileStatus(ctx, uuid.NewString(), "hash", storage.FileStatusUploaded)
 	t.Require().ErrorIs(err, storage.ErrNotFound)
 }
