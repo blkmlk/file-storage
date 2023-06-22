@@ -1,9 +1,13 @@
 package api
 
 import (
+	"net"
+
 	"github.com/blkmlk/file-storage/env"
+	"github.com/blkmlk/file-storage/protocol"
 	"github.com/blkmlk/file-storage/services/api/controllers"
 	"github.com/gin-gonic/gin"
+	"google.golang.org/grpc"
 )
 
 type API interface {
@@ -16,42 +20,72 @@ const (
 )
 
 type api struct {
-	uploadHost       string
-	uploadController *controllers.UploaderController
-	engine           *gin.Engine
+	restHost           string
+	protocolHost       string
+	restController     *controllers.RestController
+	protocolController *controllers.ProtocolController
+	restServer         *gin.Engine
+	grpcServer         *grpc.Server
 }
 
-func New(uploadController *controllers.UploaderController) (API, error) {
-	uploadHost, err := env.Get(env.UploadHost)
+func New(
+	restController *controllers.RestController,
+	protocolController *controllers.ProtocolController,
+) (API, error) {
+	restHost, err := env.Get(env.RestHost)
+	if err != nil {
+		return nil, err
+	}
+
+	protocolHost, err := env.Get(env.ProtocolHost)
 	if err != nil {
 		return nil, err
 	}
 
 	a := api{
-		uploadHost:       uploadHost,
-		uploadController: uploadController,
-		engine:           gin.Default(),
+		restHost:           restHost,
+		protocolHost:       protocolHost,
+		restController:     restController,
+		protocolController: protocolController,
+		restServer:         gin.Default(),
 	}
 
-	a.init()
+	a.initRest()
+	a.initGrpc()
 
-	return a, nil
+	return &a, nil
 }
 
-func (a api) init() {
-	a.engine.POST(PathUploadFile, a.uploadController.UploadFile)
+func (a *api) initRest() {
+	a.restServer.POST(PathUploadFile, a.restController.UploadFile)
 }
 
-func (a api) Start() error {
+func (a *api) initGrpc() {
+	a.grpcServer = grpc.NewServer()
+	protocol.RegisterUploaderServer(a.grpcServer, a.protocolController)
+}
+
+func (a *api) Start() error {
+	listener, err := net.Listen("tcp", a.protocolHost)
+	if err != nil {
+		return err
+	}
+
 	errs := make(chan error)
+
 	go func() {
-		errs <- a.engine.Run(a.uploadHost)
+		errs <- a.grpcServer.Serve(listener)
+	}()
+
+	go func() {
+		errs <- a.restServer.Run(a.restHost)
 	}()
 
 	return <-errs
 }
 
-func (a api) Stop() error {
-	//TODO implement me
-	panic("implement me")
+func (a *api) Stop() error {
+	a.grpcServer.Stop()
+
+	return nil
 }

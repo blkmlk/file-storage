@@ -1,0 +1,15 @@
+syntax = "proto3";
+option go_package = "github.com/blkmlk/file-storage/protocol";
+
+package protocol;
+
+service Uploader {
+  rpc Register (RegisterRequest) returns (RegisterResponse) {}
+}
+
+message RegisterRequest {
+  string id = 1;
+}
+
+message RegisterResponse {
+}

@@ -12,6 +12,7 @@ func main() {
 
 	container.Provide(deps.NewDB)
 	container.Provide(controllers.NewUploadController)
+	container.Provide(controllers.NewProtocolController)
 	container.Provide(api.New)
 
 	var listener api.API

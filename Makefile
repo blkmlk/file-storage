@@ -32,7 +32,8 @@ local-run:
 	docker-compose -p test up -d postgres && sleep 5
 	(\
 		export DATABASE_URL="postgres://root:root@127.0.0.1:25432/file-storage-test?sslmode=disable"; \
-		export UPLOAD_HOST="127.0.0.1:8080"; \
+		export REST_HOST="127.0.0.1:8080"; \
+		export PROTOCOL_HOST="127.0.0.1:9000"; \
 		go run cmd/migration/main.go migrate; \
 		go run cmd/uploader/main.go start; \
 	) || (docker-compose -p test down -v ; exit 1)
