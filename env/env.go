@@ -7,6 +7,7 @@ import (
 
 const (
 	DatabaseURL = "DATABASE_URL"
+	UploadHost  = "UPLOAD_HOST"
 )
 
 func NewErrNotSet(env string) error {
