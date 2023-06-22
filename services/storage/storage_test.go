@@ -67,3 +67,25 @@ func (t *testSuite) TestCreateUpdateAndGetFile() {
 	t.Require().ErrorIs(err, storage.ErrNotFound)
 	t.Require().Nil(foundFile)
 }
+
+func (t *testSuite) TestCreateFileParts() {
+	ctx := context.Background()
+	file := storage.NewFile("test")
+
+	err := t.storage.CreateFile(ctx, &file)
+	t.Require().NoError(err)
+
+	fileStorage := storage.NewFileStorage(uuid.NewString())
+	err = t.storage.CreateFileStorage(ctx, &fileStorage)
+	t.Require().NoError(err)
+
+	for i := 0; i < 10; i++ {
+		filePart := storage.NewFilePart(file.ID, i, fileStorage.ID, uuid.NewString())
+		err = t.storage.CreateFilePart(ctx, &filePart)
+		t.Require().NoError(err)
+	}
+
+	foundFileParts, err := t.storage.FindFileParts(ctx, file.ID)
+	t.Require().NoError(err)
+	t.Require().Len(foundFileParts, 10)
+}

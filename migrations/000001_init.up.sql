@@ -13,7 +13,8 @@ CREATE TABLE files (
 );
 
 CREATE TABLE storages (
-    id uuid PRIMARY KEY NOT NULL DEFAULT uuid_generate_v4()
+    id uuid PRIMARY KEY NOT NULL DEFAULT uuid_generate_v4(),
+    created_at timestamptz NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE file_parts (
@@ -25,3 +26,5 @@ CREATE TABLE file_parts (
     created_at timestamptz NOT NULL DEFAULT NOW(),
     updated_at timestamptz NOT NULL DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX file_parts_file_id_idx ON file_parts(file_id uuid_ops, seq);
