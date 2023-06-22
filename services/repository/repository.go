@@ -1,4 +1,4 @@
-package storage
+package repository
 
 import (
 	"context"
@@ -18,7 +18,7 @@ var (
 	ErrNotFound      = errors.New("not found")
 )
 
-type Storage interface {
+type Repository interface {
 	CreateFile(ctx context.Context, file *File) error
 	UpdateFileStatus(ctx context.Context, fileID string, hash string, status FileStatus) error
 	GetFile(ctx context.Context, name string) (*File, error)
@@ -33,7 +33,7 @@ type storage struct {
 	db *gorm.DB
 }
 
-func New(db *gorm.DB) Storage {
+func New(db *gorm.DB) Repository {
 	s := storage{
 		db: db,
 	}
