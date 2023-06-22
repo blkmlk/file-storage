@@ -17,11 +17,11 @@ const (
 
 type api struct {
 	uploadHost       string
-	uploadController *controllers.UploadController
+	uploadController *controllers.UploaderController
 	engine           *gin.Engine
 }
 
-func New(uploadController *controllers.UploadController) (API, error) {
+func New(uploadController *controllers.UploaderController) (API, error) {
 	uploadHost, err := env.Get(env.UploadHost)
 	if err != nil {
 		return nil, err
