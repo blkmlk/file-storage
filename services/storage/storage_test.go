@@ -43,7 +43,7 @@ func (t *testSuite) SetupTest() {
 	t.Require().NoError(err)
 }
 
-func (t *testSuite) TestCreateFile() {
+func (t *testSuite) TestCreateUpdateAndGetFile() {
 	ctx := context.Background()
 	file := storage.NewFile("test")
 
@@ -58,4 +58,12 @@ func (t *testSuite) TestCreateFile() {
 
 	err = t.storage.UpdateFileStatus(ctx, uuid.NewString(), "hash", storage.FileStatusUploaded)
 	t.Require().ErrorIs(err, storage.ErrNotFound)
+
+	foundFile, err := t.storage.GetFile(ctx, file.Name)
+	t.Require().NoError(err)
+	t.Require().Equal(storage.FileStatusUploaded, foundFile.Status)
+
+	foundFile, err = t.storage.GetFile(ctx, "unknown")
+	t.Require().ErrorIs(err, storage.ErrNotFound)
+	t.Require().Nil(foundFile)
 }

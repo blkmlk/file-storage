@@ -17,6 +17,7 @@ var (
 type Storage interface {
 	CreateFile(ctx context.Context, file *File) error
 	UpdateFileStatus(ctx context.Context, fileID string, hash string, status FileStatus) error
+	GetFile(ctx context.Context, name string) (*File, error)
 }
 
 type storage struct {
@@ -58,4 +59,17 @@ func (s storage) UpdateFileStatus(ctx context.Context, fileID string, hash strin
 	}
 
 	return nil
+}
+
+func (s storage) GetFile(ctx context.Context, name string) (*File, error) {
+	var file File
+	tx := s.db.WithContext(ctx).Table("files").Where("name = ?", name).Find(&file)
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		return nil, ErrNotFound
+	}
+
+	return &file, nil
 }
