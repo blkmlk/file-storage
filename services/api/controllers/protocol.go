@@ -20,5 +20,10 @@ func NewProtocolController(repo repository.Repository) *ProtocolController {
 }
 
 func (p *ProtocolController) Register(ctx context.Context, request *protocol.RegisterRequest) (*protocol.RegisterResponse, error) {
+	storage := repository.NewStorage(request.StorageId, request.Host)
+	if err := p.repo.CreateOrUpdateStorage(ctx, &storage); err != nil {
+		//	log
+		return nil, err
+	}
 	return &protocol.RegisterResponse{}, nil
 }

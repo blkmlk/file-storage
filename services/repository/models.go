@@ -64,9 +64,10 @@ type Storage struct {
 	UpdatedAt time.Time
 }
 
-func NewStorage(id string) Storage {
+func NewStorage(id, host string) Storage {
 	return Storage{
 		ID:        id,
+		Host:      host,
 		CreatedAt: time.Now(),
 	}
 }
