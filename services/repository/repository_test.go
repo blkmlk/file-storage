@@ -75,8 +75,8 @@ func (t *testSuite) TestCreateFileParts() {
 	err := t.repository.CreateFile(ctx, &file)
 	t.Require().NoError(err)
 
-	fileStorage := repository.NewFileStorage(uuid.NewString())
-	err = t.repository.CreateFileStorage(ctx, &fileStorage)
+	fileStorage := repository.NewStorage(uuid.NewString())
+	err = t.repository.CreateOrUpdateStorage(ctx, &fileStorage)
 	t.Require().NoError(err)
 
 	for i := 0; i < 10; i++ {
@@ -88,4 +88,16 @@ func (t *testSuite) TestCreateFileParts() {
 	foundFileParts, err := t.repository.FindFileParts(ctx, file.ID)
 	t.Require().NoError(err)
 	t.Require().Len(foundFileParts, 10)
+}
+
+func (t *testSuite) TestCreateStorage() {
+	ctx := context.Background()
+
+	storage := repository.NewStorage(uuid.NewString())
+	err := t.repository.CreateOrUpdateStorage(ctx, &storage)
+	t.Require().NoError(err)
+
+	storage.Host = "127.0.0.1:8080"
+	err = t.repository.CreateOrUpdateStorage(ctx, &storage)
+	t.Require().NoError(err)
 }

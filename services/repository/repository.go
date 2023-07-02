@@ -2,6 +2,9 @@ package repository
 
 import (
 	"context"
+	"time"
+
+	"gorm.io/gorm/clause"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -23,7 +26,7 @@ type Repository interface {
 	UpdateFileStatus(ctx context.Context, fileID string, hash string, status FileStatus) error
 	GetFile(ctx context.Context, name string) (*File, error)
 
-	CreateFileStorage(ctx context.Context, fileStorage *FileStorage) error
+	CreateOrUpdateStorage(ctx context.Context, storage *Storage) error
 
 	CreateFilePart(ctx context.Context, filePart *FilePart) error
 	FindFileParts(ctx context.Context, fileID string) ([]*FilePart, error)
@@ -34,11 +37,9 @@ type storage struct {
 }
 
 func New(db *gorm.DB) Repository {
-	s := storage{
+	return &storage{
 		db: db,
 	}
-
-	return s
 }
 
 func (s storage) CreateFile(ctx context.Context, file *File) error {
@@ -83,15 +84,20 @@ func (s storage) GetFile(ctx context.Context, name string) (*File, error) {
 	return &file, nil
 }
 
-func (s storage) CreateFileStorage(ctx context.Context, fileStorage *FileStorage) error {
-	tx := s.db.WithContext(ctx).Table("storages").Create(fileStorage)
-	if tx.Error != nil {
-		if e, ok := tx.Error.(*pgconn.PgError); ok && e.Code == ConstraintErrorCode {
-			return ErrAlreadyExists
-		}
-		return tx.Error
-	}
-	return nil
+func (s storage) CreateOrUpdateStorage(ctx context.Context, fileStorage *Storage) error {
+	return s.db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "id"}},
+		DoUpdates: []clause.Assignment{
+			{
+				Column: clause.Column{Name: "host"},
+				Value:  fileStorage.Host,
+			},
+			{
+				Column: clause.Column{Name: "updated_at"},
+				Value:  time.Now(),
+			},
+		},
+	}).WithContext(ctx).Create(fileStorage).Error
 }
 
 func (s storage) CreateFilePart(ctx context.Context, filePart *FilePart) error {

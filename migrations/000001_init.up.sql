@@ -14,7 +14,9 @@ CREATE TABLE files (
 
 CREATE TABLE storages (
     id uuid PRIMARY KEY NOT NULL DEFAULT uuid_generate_v4(),
-    created_at timestamptz NOT NULL DEFAULT NOW()
+    host varchar(100) NOT NULL DEFAULT '',
+    created_at timestamptz NOT NULL DEFAULT NOW(),
+    updated_at timestamptz NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE file_parts (

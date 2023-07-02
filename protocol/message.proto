@@ -8,7 +8,8 @@ service Uploader {
 }
 
 message RegisterRequest {
-  string id = 1;
+  string storage_id = 1;
+  string host = 2;
 }
 
 message RegisterResponse {

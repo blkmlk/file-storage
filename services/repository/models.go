@@ -57,13 +57,15 @@ func NewFilePart(fileID string, seq int, storageID, hash string) FilePart {
 	}
 }
 
-type FileStorage struct {
+type Storage struct {
 	ID        string
+	Host      string
 	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
-func NewFileStorage(id string) FileStorage {
-	return FileStorage{
+func NewStorage(id string) Storage {
+	return Storage{
 		ID:        id,
 		CreatedAt: time.Now(),
 	}
