@@ -22,8 +22,9 @@ type collector struct {
 	Storages []protocol.StorageClient
 }
 
-func (c *collector) Upload(ctx context.Context, reader io.Reader) error {
+func (c *collector) Upload(ctx context.Context, reader io.Reader) ([]*FilePart, error) {
 	storages := c.GetStorages()
+	var result []*FilePart
 
 	remainingSize := c.Size
 	partSize := c.Size / int64(len(storages))
@@ -40,19 +41,19 @@ func (c *collector) Upload(ctx context.Context, reader io.Reader) error {
 			Size: size,
 		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if !checkResp.Ready {
-			return fmt.Errorf("storage is not ready")
+			return nil, fmt.Errorf("storage is not ready")
 		}
 
 		if err = sendByChunks(ctx, storages[i], reader, checkResp.Id, size, ChunkSize); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	return result, nil
 }
 
 func sendByChunks(ctx context.Context, storage protocol.StorageClient, pipe io.Reader, id string, fullSize, chunkSize int64) error {

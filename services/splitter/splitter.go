@@ -22,8 +22,16 @@ var (
 	ErrNotEnough = errors.New("not enough available storages")
 )
 
+type FilePart struct {
+	ID        string
+	Seq       int
+	StorageID string
+	Hash      string
+	Size      string
+}
+
 type Uploader interface {
-	Upload(ctx context.Context, reader io.Reader) error
+	Upload(ctx context.Context, reader io.Reader) ([]*FilePart, error)
 }
 
 type Loader interface {
