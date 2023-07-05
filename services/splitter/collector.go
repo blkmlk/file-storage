@@ -134,10 +134,6 @@ func sendByChunks(ctx context.Context, storage protocol.StorageClient, pipe io.R
 	wg.Wait()
 	close(errCh)
 
-	if len(errCh) > 0 {
-		return <-errCh
-	}
-
 	return gErr
 }
 
