@@ -27,6 +27,7 @@ type Repository interface {
 	GetFile(ctx context.Context, name string) (*File, error)
 
 	CreateOrUpdateStorage(ctx context.Context, storage *Storage) error
+	FindStorages(ctx context.Context) ([]*Storage, error)
 
 	CreateFilePart(ctx context.Context, filePart *FilePart) error
 	FindFileParts(ctx context.Context, fileID string) ([]*FilePart, error)
@@ -98,6 +99,14 @@ func (s storage) CreateOrUpdateStorage(ctx context.Context, fileStorage *Storage
 			},
 		},
 	}).WithContext(ctx).Create(fileStorage).Error
+}
+
+func (s storage) FindStorages(ctx context.Context) ([]*Storage, error) {
+	var result []*Storage
+	if err := s.db.WithContext(ctx).Table("storages").Find(&result).Error; err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s storage) CreateFilePart(ctx context.Context, filePart *FilePart) error {

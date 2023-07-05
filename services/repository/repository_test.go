@@ -75,12 +75,12 @@ func (t *testSuite) TestCreateFileParts() {
 	err := t.repository.CreateFile(ctx, &file)
 	t.Require().NoError(err)
 
-	fileStorage := repository.NewStorage(uuid.NewString())
-	err = t.repository.CreateOrUpdateStorage(ctx, &fileStorage)
+	storage := repository.NewStorage(uuid.NewString(), "127.0.0.1:9999")
+	err = t.repository.CreateOrUpdateStorage(ctx, &storage)
 	t.Require().NoError(err)
 
 	for i := 0; i < 10; i++ {
-		filePart := repository.NewFilePart(file.ID, i, fileStorage.ID, uuid.NewString())
+		filePart := repository.NewFilePart(file.ID, i, storage.ID, uuid.NewString())
 		err = t.repository.CreateFilePart(ctx, &filePart)
 		t.Require().NoError(err)
 	}
@@ -93,11 +93,21 @@ func (t *testSuite) TestCreateFileParts() {
 func (t *testSuite) TestCreateStorage() {
 	ctx := context.Background()
 
-	storage := repository.NewStorage(uuid.NewString())
+	storage := repository.NewStorage(uuid.NewString(), "127.0.0.1:9999")
 	err := t.repository.CreateOrUpdateStorage(ctx, &storage)
 	t.Require().NoError(err)
+
+	foundStorages, err := t.repository.FindStorages(ctx)
+	t.Require().NoError(err)
+	t.Require().Len(foundStorages, 1)
+	t.Require().Equal("127.0.0.1:9999", foundStorages[0].Host)
 
 	storage.Host = "127.0.0.1:8080"
 	err = t.repository.CreateOrUpdateStorage(ctx, &storage)
 	t.Require().NoError(err)
+
+	foundStorages, err = t.repository.FindStorages(ctx)
+	t.Require().NoError(err)
+	t.Require().Len(foundStorages, 1)
+	t.Require().Equal("127.0.0.1:8080", foundStorages[0].Host)
 }

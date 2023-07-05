@@ -14,3 +14,28 @@ message RegisterRequest {
 
 message RegisterResponse {
 }
+
+service Storage {
+  rpc CheckReadiness(CheckReadinessRequest) returns (CheckReadinessResponse) {}
+  rpc UploadFile(stream UploadFileRequest) returns (UploadFileResponse) {}
+}
+
+message CheckReadinessRequest {
+  int64 size = 1;
+}
+
+message CheckReadinessResponse{
+  string id = 1;
+  bool ready = 2;
+}
+
+message UploadFileRequest {
+  string id = 1;
+  bytes data = 2;
+}
+
+message UploadFileResponse {
+  string id = 1;
+  string hash = 2;
+  int64 size = 3;
+}
