@@ -19,7 +19,12 @@ type collector struct {
 	MinStorages int
 
 	locker   sync.Mutex
-	Storages []protocol.StorageClient
+	Storages []Storage
+}
+
+type Storage struct {
+	StorageID string
+	Client    protocol.StorageClient
 }
 
 func (c *collector) Upload(ctx context.Context, reader io.Reader) ([]*FilePart, error) {
@@ -37,7 +42,7 @@ func (c *collector) Upload(ctx context.Context, reader io.Reader) ([]*FilePart, 
 			size = remainingSize
 		}
 
-		checkResp, err := storages[i].CheckReadiness(ctx, &protocol.CheckReadinessRequest{
+		checkResp, err := storages[i].Client.CheckReadiness(ctx, &protocol.CheckReadinessRequest{
 			Size: size,
 		})
 		if err != nil {
@@ -48,15 +53,21 @@ func (c *collector) Upload(ctx context.Context, reader io.Reader) ([]*FilePart, 
 			return nil, fmt.Errorf("storage is not ready")
 		}
 
-		if err = sendByChunks(ctx, storages[i], reader, checkResp.Id, size, ChunkSize); err != nil {
+		filePart, err := sendByChunks(ctx, &storages[i], reader, checkResp.Id, size, ChunkSize)
+		if err != nil {
 			return nil, err
 		}
+		filePart.Seq = i
+		filePart.Size = size
+		filePart.StorageID = storages[i].StorageID
+
+		result = append(result, filePart)
 	}
 
 	return result, nil
 }
 
-func sendByChunks(ctx context.Context, storage protocol.StorageClient, pipe io.Reader, id string, fullSize, chunkSize int64) error {
+func sendByChunks(ctx context.Context, storage *Storage, pipe io.Reader, id string, fullSize, chunkSize int64) (*FilePart, error) {
 	inCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -66,21 +77,25 @@ func sendByChunks(ctx context.Context, storage protocol.StorageClient, pipe io.R
 
 	dataCh := make(chan []byte, 1)
 	errCh := make(chan error, 2)
+	var filePart FilePart
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		stream, err := storage.UploadFile(inCtx)
+		stream, err := storage.Client.UploadFile(inCtx)
 		if err != nil {
 			errCh <- err
 			return
 		}
 
 		defer func() {
-			if err = stream.CloseSend(); err != nil {
+			resp, err := stream.CloseAndRecv()
+			if err != nil {
 				errCh <- err
 				return
 			}
+			filePart.ID = resp.Id
+			filePart.Hash = resp.Hash
 		}()
 
 		for data := range dataCh {
@@ -136,10 +151,14 @@ func sendByChunks(ctx context.Context, storage protocol.StorageClient, pipe io.R
 	close(errCh)
 
 	if len(errCh) > 0 {
-		return <-errCh
+		gErr = <-errCh
 	}
 
-	return gErr
+	if gErr != nil {
+		return nil, gErr
+	}
+
+	return &filePart, nil
 }
 
 func newCollector(name string, size int64, minStorages int) collector {
@@ -150,17 +169,17 @@ func newCollector(name string, size int64, minStorages int) collector {
 	}
 }
 
-func (c *collector) AddStorage(s protocol.StorageClient) {
+func (c *collector) AddStorage(s *Storage) {
 	c.locker.Lock()
 	defer c.locker.Unlock()
-	c.Storages = append(c.Storages, s)
+	c.Storages = append(c.Storages, *s)
 }
 
-func (c *collector) GetStorages() []protocol.StorageClient {
+func (c *collector) GetStorages() []Storage {
 	c.locker.Lock()
 	defer c.locker.Unlock()
 
-	copied := make([]protocol.StorageClient, len(c.Storages))
+	copied := make([]Storage, len(c.Storages))
 	copy(copied, c.Storages)
 	return copied
 }

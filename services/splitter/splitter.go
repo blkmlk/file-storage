@@ -27,7 +27,7 @@ type FilePart struct {
 	Seq       int
 	StorageID string
 	Hash      string
-	Size      string
+	Size      int64
 }
 
 type Uploader interface {
@@ -84,14 +84,17 @@ func (s *splitter) GetUploader(ctx context.Context, input GetUploaderInput) (Upl
 				return
 			}
 
-			storage := protocol.NewStorageClient(conn)
-			resp, err := storage.CheckReadiness(inCtx, &protocol.CheckReadinessRequest{
+			client := protocol.NewStorageClient(conn)
+			resp, err := client.CheckReadiness(inCtx, &protocol.CheckReadinessRequest{
 				Size: size,
 			})
 			if err != nil || !resp.Ready {
 				return
 			}
-			cl.AddStorage(storage)
+			cl.AddStorage(&Storage{
+				StorageID: s.ID,
+				Client:    client,
+			})
 		}(ctx, *s, maxPartSize)
 	}
 	wg.Wait()
