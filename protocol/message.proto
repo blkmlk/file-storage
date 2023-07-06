@@ -18,6 +18,7 @@ message RegisterResponse {
 service Storage {
   rpc CheckReadiness(CheckReadinessRequest) returns (CheckReadinessResponse) {}
   rpc UploadFile(stream UploadFileRequest) returns (UploadFileResponse) {}
+  rpc GetFile(GetFileRequest) returns (stream GetFileResponse) {}
 }
 
 message CheckReadinessRequest {
@@ -38,4 +39,12 @@ message UploadFileResponse {
   string id = 1;
   string hash = 2;
   int64 size = 3;
+}
+
+message GetFileRequest {
+  string id = 1;
+}
+
+message GetFileResponse {
+  bytes data = 1;
 }

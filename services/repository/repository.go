@@ -27,6 +27,7 @@ type Repository interface {
 	GetFile(ctx context.Context, name string) (*File, error)
 
 	CreateOrUpdateStorage(ctx context.Context, storage *Storage) error
+	GetStorage(ctx context.Context, id string) (*Storage, error)
 	FindStorages(ctx context.Context) ([]*Storage, error)
 
 	CreateFilePart(ctx context.Context, filePart *FilePart) error
@@ -99,6 +100,11 @@ func (s storage) CreateOrUpdateStorage(ctx context.Context, fileStorage *Storage
 			},
 		},
 	}).WithContext(ctx).Create(fileStorage).Error
+}
+
+func (s storage) GetStorage(ctx context.Context, id string) (*Storage, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (s storage) FindStorages(ctx context.Context) ([]*Storage, error) {

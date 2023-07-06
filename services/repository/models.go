@@ -17,6 +17,7 @@ type File struct {
 	ID        string
 	Name      string
 	Hash      string
+	Size      int64
 	Status    FileStatus
 	CreatedAt time.Time
 	UpdatedAt time.Time

@@ -31,10 +31,11 @@ type FilePart struct {
 }
 
 type Uploader interface {
-	Upload(ctx context.Context, reader io.Reader) ([]*FilePart, error)
+	Upload(ctx context.Context, reader io.Reader) error
 }
 
-type Loader interface {
+type Getter interface {
+	Get(ctx context.Context) (io.Reader, error)
 }
 
 type GetUploaderInput struct {
@@ -44,8 +45,13 @@ type GetUploaderInput struct {
 	NumStorages int
 }
 
+type GetGetterInput struct {
+	Name string
+}
+
 type Splitter interface {
 	GetUploader(ctx context.Context, input GetUploaderInput) (Uploader, error)
+	GetGetter(ctx context.Context, input GetGetterInput) (Getter, error)
 }
 
 func New(repo repository.Repository) Splitter {
@@ -69,7 +75,7 @@ func (s *splitter) GetUploader(ctx context.Context, input GetUploaderInput) (Upl
 	}
 
 	var wg sync.WaitGroup
-	var cl = newCollector(input.Name, input.Size, input.MinStorages)
+	var cl = newUploader(s.repo, input.Name, input.Size)
 	maxPartSize := input.Size / int64(input.MinStorages)
 	for _, s := range storages {
 		wg.Add(1)
@@ -100,6 +106,64 @@ func (s *splitter) GetUploader(ctx context.Context, input GetUploaderInput) (Upl
 	wg.Wait()
 
 	if cl.LenStorages() < input.MinStorages {
+		return nil, ErrNotEnough
+	}
+
+	return &cl, nil
+}
+
+func (s *splitter) GetGetter(ctx context.Context, input GetGetterInput) (Getter, error) {
+	file, err := s.repo.GetFile(ctx, input.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	fileParts, err := s.repo.FindFileParts(ctx, file.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	var wg sync.WaitGroup
+	cl := newUploader(s.repo, file.Name, file.Size)
+
+	for _, fp := range fileParts {
+		wg.Add(1)
+		go func(filePart *repository.FilePart) {
+			defer wg.Done()
+
+			storage, err := s.repo.GetStorage(ctx, filePart.StorageID)
+			if err != nil {
+				return
+			}
+
+			inCtx, cancel := context.WithTimeout(ctx, MaxResponseTime)
+			defer cancel()
+
+			conn, err := grpc.DialContext(inCtx, storage.Host)
+			if err != nil {
+				return
+			}
+			client := protocol.NewStorageClient(conn)
+			resp, err := client.CheckReadiness(inCtx, &protocol.CheckReadinessRequest{
+				Size: file.Size,
+			})
+
+			if err != nil {
+				return
+			}
+
+			if !resp.Ready {
+				return
+			}
+			cl.AddStorage(&Storage{
+				StorageID: storage.ID,
+				Client:    client,
+			})
+		}(fp)
+	}
+	wg.Wait()
+
+	if cl.LenStorages() < len(fileParts) {
 		return nil, ErrNotEnough
 	}
 

@@ -110,6 +110,7 @@ var Uploader_ServiceDesc = grpc.ServiceDesc{
 type StorageClient interface {
 	CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error)
 	UploadFile(ctx context.Context, opts ...grpc.CallOption) (Storage_UploadFileClient, error)
+	GetFile(ctx context.Context, in *GetFileRequest, opts ...grpc.CallOption) (Storage_GetFileClient, error)
 }
 
 type storageClient struct {
@@ -163,12 +164,45 @@ func (x *storageUploadFileClient) CloseAndRecv() (*UploadFileResponse, error) {
 	return m, nil
 }
 
+func (c *storageClient) GetFile(ctx context.Context, in *GetFileRequest, opts ...grpc.CallOption) (Storage_GetFileClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Storage_ServiceDesc.Streams[1], "/protocol.Storage/GetFile", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &storageGetFileClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Storage_GetFileClient interface {
+	Recv() (*GetFileResponse, error)
+	grpc.ClientStream
+}
+
+type storageGetFileClient struct {
+	grpc.ClientStream
+}
+
+func (x *storageGetFileClient) Recv() (*GetFileResponse, error) {
+	m := new(GetFileResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // StorageServer is the server API for Storage service.
 // All implementations must embed UnimplementedStorageServer
 // for forward compatibility
 type StorageServer interface {
 	CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error)
 	UploadFile(Storage_UploadFileServer) error
+	GetFile(*GetFileRequest, Storage_GetFileServer) error
 	mustEmbedUnimplementedStorageServer()
 }
 
@@ -181,6 +215,9 @@ func (UnimplementedStorageServer) CheckReadiness(context.Context, *CheckReadines
 }
 func (UnimplementedStorageServer) UploadFile(Storage_UploadFileServer) error {
 	return status.Errorf(codes.Unimplemented, "method UploadFile not implemented")
+}
+func (UnimplementedStorageServer) GetFile(*GetFileRequest, Storage_GetFileServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetFile not implemented")
 }
 func (UnimplementedStorageServer) mustEmbedUnimplementedStorageServer() {}
 
@@ -239,6 +276,27 @@ func (x *storageUploadFileServer) Recv() (*UploadFileRequest, error) {
 	return m, nil
 }
 
+func _Storage_GetFile_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetFileRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StorageServer).GetFile(m, &storageGetFileServer{stream})
+}
+
+type Storage_GetFileServer interface {
+	Send(*GetFileResponse) error
+	grpc.ServerStream
+}
+
+type storageGetFileServer struct {
+	grpc.ServerStream
+}
+
+func (x *storageGetFileServer) Send(m *GetFileResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // Storage_ServiceDesc is the grpc.ServiceDesc for Storage service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -256,6 +314,11 @@ var Storage_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "UploadFile",
 			Handler:       _Storage_UploadFile_Handler,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "GetFile",
+			Handler:       _Storage_GetFile_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "message.proto",

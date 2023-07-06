@@ -6,6 +6,8 @@ import (
 	"io"
 	"sync"
 
+	"github.com/blkmlk/file-storage/services/repository"
+
 	"github.com/blkmlk/file-storage/protocol"
 )
 
@@ -13,13 +15,14 @@ const (
 	ChunkSize = 4096
 )
 
-type collector struct {
-	Name        string
-	Size        int64
-	MinStorages int
+type uploader struct {
+	Name string
+	Size int64
 
 	locker   sync.Mutex
 	Storages []Storage
+
+	repo repository.Repository
 }
 
 type Storage struct {
@@ -27,7 +30,7 @@ type Storage struct {
 	Client    protocol.StorageClient
 }
 
-func (c *collector) Upload(ctx context.Context, reader io.Reader) ([]*FilePart, error) {
+func (c *uploader) Upload(ctx context.Context, reader io.Reader) error {
 	storages := c.GetStorages()
 	var result []*FilePart
 
@@ -46,16 +49,16 @@ func (c *collector) Upload(ctx context.Context, reader io.Reader) ([]*FilePart, 
 			Size: size,
 		})
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		if !checkResp.Ready {
-			return nil, fmt.Errorf("storage is not ready")
+			return fmt.Errorf("storage is not ready")
 		}
 
 		filePart, err := sendByChunks(ctx, &storages[i], reader, checkResp.Id, size, ChunkSize)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		filePart.Seq = i
 		filePart.Size = size
@@ -64,7 +67,19 @@ func (c *collector) Upload(ctx context.Context, reader io.Reader) ([]*FilePart, 
 		result = append(result, filePart)
 	}
 
-	return result, nil
+	file := repository.NewFile(c.Name)
+	if err := c.repo.CreateFile(ctx, &file); err != nil {
+		return err
+	}
+
+	for _, part := range result {
+		filePart := repository.NewFilePart(file.ID, part.Seq, part.StorageID, part.Hash)
+		if err := c.repo.CreateFilePart(ctx, &filePart); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func sendByChunks(ctx context.Context, storage *Storage, pipe io.Reader, id string, fullSize, chunkSize int64) (*FilePart, error) {
@@ -161,21 +176,21 @@ func sendByChunks(ctx context.Context, storage *Storage, pipe io.Reader, id stri
 	return &filePart, nil
 }
 
-func newCollector(name string, size int64, minStorages int) collector {
-	return collector{
-		Name:        name,
-		Size:        size,
-		MinStorages: minStorages,
+func newUploader(repo repository.Repository, name string, size int64) uploader {
+	return uploader{
+		Name: name,
+		Size: size,
+		repo: repo,
 	}
 }
 
-func (c *collector) AddStorage(s *Storage) {
+func (c *uploader) AddStorage(s *Storage) {
 	c.locker.Lock()
 	defer c.locker.Unlock()
 	c.Storages = append(c.Storages, *s)
 }
 
-func (c *collector) GetStorages() []Storage {
+func (c *uploader) GetStorages() []Storage {
 	c.locker.Lock()
 	defer c.locker.Unlock()
 
@@ -184,7 +199,7 @@ func (c *collector) GetStorages() []Storage {
 	return copied
 }
 
-func (c *collector) LenStorages() int {
+func (c *uploader) LenStorages() int {
 	c.locker.Lock()
 	defer c.locker.Unlock()
 	return len(c.Storages)
