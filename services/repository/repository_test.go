@@ -53,15 +53,17 @@ func (t *testSuite) TestCreateUpdateAndGetFile() {
 	err = t.repository.CreateFile(ctx, &file)
 	t.Require().ErrorIs(err, repository.ErrAlreadyExists)
 
-	err = t.repository.UpdateFileStatus(ctx, file.ID, "hash", repository.FileStatusUploaded)
+	err = t.repository.UpdateFileStatus(ctx, file.ID, "name-1", 100, repository.FileStatusUploaded)
 	t.Require().NoError(err)
 
-	err = t.repository.UpdateFileStatus(ctx, uuid.NewString(), "hash", repository.FileStatusUploaded)
+	err = t.repository.UpdateFileStatus(ctx, uuid.NewString(), "name-2", 100, repository.FileStatusUploaded)
 	t.Require().ErrorIs(err, repository.ErrNotFound)
 
 	foundFile, err := t.repository.GetFile(ctx, file.ID)
 	t.Require().NoError(err)
 	t.Require().Equal(repository.FileStatusUploaded, foundFile.Status)
+	t.Require().NotNil(foundFile.Name)
+	t.Require().Equal("name-1", *foundFile.Name)
 
 	foundFile, err = t.repository.GetFileByName(ctx, "unknown")
 	t.Require().ErrorIs(err, repository.ErrNotFound)
@@ -80,7 +82,7 @@ func (t *testSuite) TestCreateFileParts() {
 	t.Require().NoError(err)
 
 	for i := 0; i < 10; i++ {
-		filePart := repository.NewFilePart(file.ID, i, storage.ID, uuid.NewString())
+		filePart := repository.NewFilePart(file.ID, "", i, storage.ID, uuid.NewString())
 		err = t.repository.CreateFilePart(ctx, &filePart)
 		t.Require().NoError(err)
 	}
