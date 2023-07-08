@@ -19,7 +19,8 @@ const (
 )
 
 var (
-	ErrExists = errors.New("file exists")
+	ErrExists   = errors.New("file exists")
+	ErrNotFound = errors.New("not found")
 )
 
 type FileInfo struct {
@@ -100,8 +101,20 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 }
 
 func (m *manager) Load(ctx context.Context, name string) (io.Reader, error) {
-	//TODO implement me
-	panic("implement me")
+	file, err := m.repo.GetFileByName(ctx, name)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+
+	ldr, err := m.prepareLoaderForDownload(ctx, file)
+	if err != nil {
+		return nil, err
+	}
+
+	return ldr.Download(ctx)
 }
 
 func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*loader, error) {
@@ -114,7 +127,7 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 		return nil, fmt.Errorf("not enough storages")
 	}
 
-	ldr := NewLoader(info)
+	ldr := NewLoader(info.Size)
 
 	var wg sync.WaitGroup
 	maxPartSize := info.Size / int64(m.minStorages)
@@ -139,7 +152,7 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 				return
 			}
 			ldr.AddFilePart(&FilePart{
-				ID:        resp.Id,
+				RemoteID:  resp.Id,
 				StorageID: s.ID,
 				Client:    client,
 			})
@@ -149,6 +162,62 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 
 	if ldr.LenFileParts() < m.minStorages {
 		return nil, fmt.Errorf("not enough storages")
+	}
+
+	return ldr, nil
+}
+
+func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository.File) (*loader, error) {
+	fileParts, err := m.repo.FindFileParts(ctx, file.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	ldr := NewLoader(file.Size)
+
+	var wg sync.WaitGroup
+	for i := 0; i < len(fileParts); i++ {
+		wg.Add(1)
+		go func(ctx context.Context, fp repository.FilePart) {
+			defer wg.Done()
+
+			storage, err := m.repo.GetStorage(ctx, fp.StorageID)
+			if err != nil {
+				return
+			}
+
+			inCtx, cancel := context.WithTimeout(ctx, MaxResponseTime)
+			defer cancel()
+
+			conn, err := grpc.DialContext(inCtx, storage.Host)
+			if err != nil {
+				return
+			}
+
+			client := protocol.NewStorageClient(conn)
+			resp, err := client.CheckFilePartExistence(ctx, &protocol.CheckFilePartExistenceRequest{
+				Id: fp.RemoteID,
+			})
+			if err != nil {
+				return
+			}
+
+			if !resp.Exists {
+				return
+			}
+
+			ldr.AddFilePart(&FilePart{
+				StorageID: storage.ID,
+				Client:    client,
+				RemoteID:  fp.RemoteID,
+				Hash:      fp.Hash,
+			})
+		}(ctx, *fileParts[i])
+	}
+	wg.Wait()
+
+	if ldr.LenFileParts() != len(fileParts) {
+		return nil, fmt.Errorf("not enough parts")
 	}
 
 	return ldr, nil

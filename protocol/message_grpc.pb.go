@@ -109,6 +109,7 @@ var Uploader_ServiceDesc = grpc.ServiceDesc{
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type StorageClient interface {
 	CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error)
+	CheckFilePartExistence(ctx context.Context, in *CheckFilePartExistenceRequest, opts ...grpc.CallOption) (*CheckFilePartExistenceResponse, error)
 	UploadFile(ctx context.Context, opts ...grpc.CallOption) (Storage_UploadFileClient, error)
 	GetFile(ctx context.Context, in *GetFileRequest, opts ...grpc.CallOption) (Storage_GetFileClient, error)
 }
@@ -124,6 +125,15 @@ func NewStorageClient(cc grpc.ClientConnInterface) StorageClient {
 func (c *storageClient) CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error) {
 	out := new(CheckReadinessResponse)
 	err := c.cc.Invoke(ctx, "/protocol.Storage/CheckReadiness", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *storageClient) CheckFilePartExistence(ctx context.Context, in *CheckFilePartExistenceRequest, opts ...grpc.CallOption) (*CheckFilePartExistenceResponse, error) {
+	out := new(CheckFilePartExistenceResponse)
+	err := c.cc.Invoke(ctx, "/protocol.Storage/CheckFilePartExistence", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -201,6 +211,7 @@ func (x *storageGetFileClient) Recv() (*GetFileResponse, error) {
 // for forward compatibility
 type StorageServer interface {
 	CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error)
+	CheckFilePartExistence(context.Context, *CheckFilePartExistenceRequest) (*CheckFilePartExistenceResponse, error)
 	UploadFile(Storage_UploadFileServer) error
 	GetFile(*GetFileRequest, Storage_GetFileServer) error
 	mustEmbedUnimplementedStorageServer()
@@ -212,6 +223,9 @@ type UnimplementedStorageServer struct {
 
 func (UnimplementedStorageServer) CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CheckReadiness not implemented")
+}
+func (UnimplementedStorageServer) CheckFilePartExistence(context.Context, *CheckFilePartExistenceRequest) (*CheckFilePartExistenceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckFilePartExistence not implemented")
 }
 func (UnimplementedStorageServer) UploadFile(Storage_UploadFileServer) error {
 	return status.Errorf(codes.Unimplemented, "method UploadFile not implemented")
@@ -246,6 +260,24 @@ func _Storage_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StorageServer).CheckReadiness(ctx, req.(*CheckReadinessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Storage_CheckFilePartExistence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckFilePartExistenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageServer).CheckFilePartExistence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/protocol.Storage/CheckFilePartExistence",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageServer).CheckFilePartExistence(ctx, req.(*CheckFilePartExistenceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -307,6 +339,10 @@ var Storage_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CheckReadiness",
 			Handler:    _Storage_CheckReadiness_Handler,
+		},
+		{
+			MethodName: "CheckFilePartExistence",
+			Handler:    _Storage_CheckFilePartExistence_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

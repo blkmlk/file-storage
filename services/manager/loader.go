@@ -14,29 +14,28 @@ const (
 )
 
 type FilePart struct {
-	ID        string
+	RemoteID  string
 	StorageID string
 	Client    protocol.StorageClient
 
-	RemoteID string
-	Hash     string
+	Hash string
 }
 
 type loader struct {
-	info      FileInfo
+	size      int64
 	locker    sync.Mutex
 	fileParts []FilePart
 }
 
-func NewLoader(info FileInfo) *loader {
-	return &loader{info: info}
+func NewLoader(size int64) *loader {
+	return &loader{size: size}
 }
 
 func (l *loader) Upload(ctx context.Context, reader io.Reader) error {
 	fileParts := l.fileParts
 
-	remainingSize := l.info.Size
-	partSize := l.info.Size / int64(len(fileParts))
+	remainingSize := l.size
+	partSize := l.size / int64(len(fileParts))
 
 	for i := 0; i < len(fileParts); i++ {
 		last := i == len(fileParts)-1
@@ -55,6 +54,10 @@ func (l *loader) Upload(ctx context.Context, reader io.Reader) error {
 	}
 
 	return nil
+}
+
+func (l *loader) Download(ctx context.Context) (io.Reader, error) {
+	return nil, nil
 }
 
 func (l *loader) AddFilePart(fp *FilePart) {
@@ -110,7 +113,7 @@ func (l *loader) sendByChunks(ctx context.Context, part *FilePart, pipe io.Reade
 
 		for data := range dataCh {
 			err = stream.Send(&protocol.UploadFileRequest{
-				Id:   part.ID,
+				Id:   part.RemoteID,
 				Data: data,
 			})
 			if err != nil {
