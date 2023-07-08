@@ -23,14 +23,16 @@ var (
 
 type Repository interface {
 	CreateFile(ctx context.Context, file *File) error
-	UpdateFileStatus(ctx context.Context, fileID string, hash string, status FileStatus) error
-	GetFile(ctx context.Context, name string) (*File, error)
+	UpdateFileStatus(ctx context.Context, id, name string, size int64, status FileStatus) error
+	GetFile(ctx context.Context, id string) (*File, error)
+	GetFileByName(ctx context.Context, name string) (*File, error)
 
 	CreateOrUpdateStorage(ctx context.Context, storage *Storage) error
 	GetStorage(ctx context.Context, id string) (*Storage, error)
 	FindStorages(ctx context.Context) ([]*Storage, error)
 
 	CreateFilePart(ctx context.Context, filePart *FilePart) error
+	CreateFileParts(ctx context.Context, fileParts []FilePart) error
 	FindFileParts(ctx context.Context, fileID string) ([]*FilePart, error)
 }
 
@@ -55,10 +57,11 @@ func (s storage) CreateFile(ctx context.Context, file *File) error {
 	return nil
 }
 
-func (s storage) UpdateFileStatus(ctx context.Context, fileID string, hash string, status FileStatus) error {
-	tx := s.db.WithContext(ctx).Table("files").Where("id = ?", fileID).
+func (s storage) UpdateFileStatus(ctx context.Context, id, name string, size int64, status FileStatus) error {
+	tx := s.db.WithContext(ctx).Table("files").Where("id = ?", id).
 		Updates(map[string]any{
-			"hash":   hash,
+			"name":   name,
+			"size":   size,
 			"status": status,
 		})
 
@@ -73,7 +76,20 @@ func (s storage) UpdateFileStatus(ctx context.Context, fileID string, hash strin
 	return nil
 }
 
-func (s storage) GetFile(ctx context.Context, name string) (*File, error) {
+func (s storage) GetFile(ctx context.Context, id string) (*File, error) {
+	var file File
+	tx := s.db.WithContext(ctx).Table("files").Where("id = ?", id).Find(&file)
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		return nil, ErrNotFound
+	}
+
+	return &file, nil
+}
+
+func (s storage) GetFileByName(ctx context.Context, name string) (*File, error) {
 	var file File
 	tx := s.db.WithContext(ctx).Table("files").Where("name = ?", name).Find(&file)
 	if tx.Error != nil {
@@ -121,6 +137,14 @@ func (s storage) CreateFilePart(ctx context.Context, filePart *FilePart) error {
 		if e, ok := tx.Error.(*pgconn.PgError); ok && e.Code == ConstraintErrorCode {
 			return ErrAlreadyExists
 		}
+		return tx.Error
+	}
+	return nil
+}
+
+func (s storage) CreateFileParts(ctx context.Context, fileParts []FilePart) error {
+	tx := s.db.WithContext(ctx).CreateInBatches(fileParts, len(fileParts))
+	if tx.Error != nil {
 		return tx.Error
 	}
 	return nil

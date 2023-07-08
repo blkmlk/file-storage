@@ -15,7 +15,7 @@ const (
 
 type File struct {
 	ID        string
-	Name      string
+	Name      *string
 	Hash      string
 	Size      int64
 	Status    FileStatus
@@ -23,11 +23,11 @@ type File struct {
 	UpdatedAt time.Time
 }
 
-func NewFile(name string) File {
+func NewFile() File {
 	now := time.Now().UTC()
 	return File{
 		ID:        uuid.NewString(),
-		Name:      name,
+		Name:      nil,
 		Hash:      "",
 		Status:    FileStatusCreated,
 		CreatedAt: now,
@@ -38,6 +38,7 @@ func NewFile(name string) File {
 type FilePart struct {
 	ID        string
 	FileID    string
+	RemoteID  string
 	Seq       int
 	Hash      string
 	StorageID string
@@ -45,11 +46,12 @@ type FilePart struct {
 	UpdatedAt time.Time
 }
 
-func NewFilePart(fileID string, seq int, storageID, hash string) FilePart {
+func NewFilePart(fileID, remoteID string, seq int, storageID, hash string) FilePart {
 	now := time.Now()
 	return FilePart{
 		ID:        uuid.NewString(),
 		FileID:    fileID,
+		RemoteID:  remoteID,
 		Seq:       seq,
 		Hash:      hash,
 		StorageID: storageID,

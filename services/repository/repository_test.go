@@ -45,7 +45,7 @@ func (t *testSuite) SetupTest() {
 
 func (t *testSuite) TestCreateUpdateAndGetFile() {
 	ctx := context.Background()
-	file := repository.NewFile("test")
+	file := repository.NewFile()
 
 	err := t.repository.CreateFile(ctx, &file)
 	t.Require().NoError(err)
@@ -59,18 +59,18 @@ func (t *testSuite) TestCreateUpdateAndGetFile() {
 	err = t.repository.UpdateFileStatus(ctx, uuid.NewString(), "hash", repository.FileStatusUploaded)
 	t.Require().ErrorIs(err, repository.ErrNotFound)
 
-	foundFile, err := t.repository.GetFile(ctx, file.Name)
+	foundFile, err := t.repository.GetFile(ctx, file.ID)
 	t.Require().NoError(err)
 	t.Require().Equal(repository.FileStatusUploaded, foundFile.Status)
 
-	foundFile, err = t.repository.GetFile(ctx, "unknown")
+	foundFile, err = t.repository.GetFileByName(ctx, "unknown")
 	t.Require().ErrorIs(err, repository.ErrNotFound)
 	t.Require().Nil(foundFile)
 }
 
 func (t *testSuite) TestCreateFileParts() {
 	ctx := context.Background()
-	file := repository.NewFile("test")
+	file := repository.NewFile()
 
 	err := t.repository.CreateFile(ctx, &file)
 	t.Require().NoError(err)
