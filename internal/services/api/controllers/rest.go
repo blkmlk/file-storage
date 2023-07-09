@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net/http"
@@ -84,4 +85,22 @@ func (c *RestController) PostUploadFile(ctx *gin.Context) {
 		return
 	}
 	ctx.Status(http.StatusCreated)
+}
+
+func (c *RestController) GetDownloadFile(ctx *gin.Context) {
+	var buffer bytes.Buffer
+	fileName := ctx.Param("name")
+
+	file, err := c.repo.GetFileByName(ctx, fileName)
+	if err != nil {
+		ctx.Status(http.StatusInternalServerError)
+		return
+	}
+
+	ctx.DataFromReader(http.StatusOK, file.Size, "application/zip", &buffer, nil)
+
+	if err = c.fileManager.Load(ctx, fileName, &buffer); err != nil {
+		ctx.Status(http.StatusInternalServerError)
+		return
+	}
 }
