@@ -38,5 +38,5 @@ type mockedClientFactory struct {
 }
 
 func (m mockedClientFactory) NewStorageClient(ctx context.Context, host string) (protocol.StorageClient, error) {
-	return &mocks.Storage{Ctx: ctx}, nil
+	return mocks.NewStorage(ctx), nil
 }

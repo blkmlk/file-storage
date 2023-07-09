@@ -23,3 +23,6 @@ func (t *testSuite) SetupSuite() {
 	})
 	t.Require().NoError(err)
 }
+
+func (t *testSuite) TestUpload() {
+}

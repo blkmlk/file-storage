@@ -33,6 +33,9 @@ func NewLoader(size int64) *loader {
 }
 
 func (l *loader) Upload(ctx context.Context, reader io.Reader) error {
+	l.locker.Lock()
+	defer l.locker.Unlock()
+
 	fileParts := l.fileParts
 
 	remainingSize := l.size
@@ -58,9 +61,13 @@ func (l *loader) Upload(ctx context.Context, reader io.Reader) error {
 }
 
 func (l *loader) Download(ctx context.Context, writer io.Writer) error {
+	l.locker.Lock()
+	defer l.locker.Unlock()
+
+	fileParts := l.fileParts
+
 	targetSize := l.size
 	sent := int64(0)
-	fileParts := l.GetFileParts()
 
 	for _, fp := range fileParts {
 		n, err := l.getByChunks(ctx, &fp, writer, ChunkSize)
@@ -102,13 +109,11 @@ func (l *loader) LenFileParts() int {
 	return len(l.fileParts)
 }
 
-func (l *loader) sendByChunks(ctx context.Context, part *FilePart, pipe io.Reader, fullSize, chunkSize int64) error {
+func (l *loader) sendByChunks(ctx context.Context, part *FilePart, reader io.Reader, fullSize, chunkSize int64) error {
 	inCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	var wg sync.WaitGroup
-	buff := make([]byte, chunkSize)
-	remainingSize := fullSize
 
 	dataCh := make(chan []byte, 1)
 	errCh := make(chan error, 2)
@@ -128,7 +133,6 @@ func (l *loader) sendByChunks(ctx context.Context, part *FilePart, pipe io.Reade
 				errCh <- err
 				return
 			}
-			part.RemoteID = resp.Id
 			part.Hash = resp.Hash
 			part.Size = fullSize
 		}()
@@ -146,6 +150,8 @@ func (l *loader) sendByChunks(ctx context.Context, part *FilePart, pipe io.Reade
 	}()
 
 	var gErr error
+	remainingSize := fullSize
+	buff := make([]byte, chunkSize)
 
 	for remainingSize > 0 {
 		chunk := chunkSize
@@ -154,7 +160,7 @@ func (l *loader) sendByChunks(ctx context.Context, part *FilePart, pipe io.Reade
 		}
 
 		data := buff[:chunk]
-		n, err := pipe.Read(data)
+		n, err := reader.Read(data)
 		if err != nil {
 			gErr = err
 			break
@@ -207,7 +213,7 @@ func (l *loader) getByChunks(ctx context.Context, part *FilePart, pipe io.Writer
 		}
 	}()
 
-	resp, err := part.Client.GetFile(ctx, &protocol.GetFileRequest{Id: part.RemoteID, ChunkSize: ChunkSize})
+	resp, err := part.Client.GetFile(ctx, &protocol.GetFileRequest{Id: part.RemoteID, ChunkSize: chunkSize})
 	if err != nil {
 		return 0, err
 	}

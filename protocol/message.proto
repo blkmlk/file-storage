@@ -45,7 +45,6 @@ message UploadFileRequest {
 }
 
 message UploadFileResponse {
-  string id = 1;
   string hash = 2;
   int64 size = 3;
 }
