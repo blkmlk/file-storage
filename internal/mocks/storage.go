@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"sync"
 
 	"google.golang.org/grpc/metadata"
@@ -80,8 +81,17 @@ func (s *Storage) UploadFile(ctx context.Context, opts ...grpc.CallOption) (prot
 }
 
 func (s *Storage) GetFile(ctx context.Context, in *protocol.GetFileRequest, opts ...grpc.CallOption) (protocol.Storage_GetFileClient, error) {
-	//TODO implement me
-	panic("implement me")
+	s.locker.RLock()
+	defer s.locker.RUnlock()
+	fp, ok := s.fileParts[in.Id]
+	if !ok {
+		return nil, fmt.Errorf("not found")
+	}
+
+	return &storageGetFileStream{
+		fp:        *fp,
+		chunkSize: in.ChunkSize,
+	}, nil
 }
 
 type storageUploadStream struct {
@@ -152,6 +162,59 @@ func (s *storageUploadStream) SendMsg(m interface{}) error {
 }
 
 func (s *storageUploadStream) RecvMsg(m interface{}) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+type storageGetFileStream struct {
+	fp        FilePart
+	chunkSize int64
+	offset    int
+}
+
+func (s *storageGetFileStream) Recv() (*protocol.GetFileResponse, error) {
+	if int64(s.offset) >= s.fp.Size {
+		return nil, io.EOF
+	}
+
+	chunkSize := int(s.chunkSize)
+	if s.offset+int(s.chunkSize) > s.fp.Data.Len() {
+		chunkSize = s.fp.Data.Len() - s.offset
+	}
+
+	resp := &protocol.GetFileResponse{
+		Data: s.fp.Data.Bytes()[s.offset : s.offset+chunkSize],
+	}
+	s.offset += int(s.chunkSize)
+
+	return resp, nil
+}
+
+func (s *storageGetFileStream) CloseSend() error {
+	return nil
+}
+
+func (s *storageGetFileStream) Header() (metadata.MD, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *storageGetFileStream) Trailer() metadata.MD {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *storageGetFileStream) Context() context.Context {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *storageGetFileStream) SendMsg(m interface{}) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *storageGetFileStream) RecvMsg(m interface{}) error {
 	//TODO implement me
 	panic("implement me")
 }

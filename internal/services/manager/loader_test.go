@@ -68,4 +68,9 @@ func TestLoader_Upload(t *testing.T) {
 
 		offset += int(fp.Size)
 	}
+
+	var recovered bytes.Buffer
+	err = ldr.Download(ctx, &recovered)
+	require.NoError(t, err)
+	require.Equal(t, buff, recovered.Bytes())
 }
