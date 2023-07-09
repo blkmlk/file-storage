@@ -127,6 +127,9 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 		return nil, fmt.Errorf("not enough storages")
 	}
 
+	connCtx, connCancel := context.WithCancel(ctx)
+	defer connCancel()
+
 	ldr := NewLoader(info.Size)
 
 	var wg sync.WaitGroup
@@ -134,18 +137,13 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 	for _, s := range storages {
 		wg.Add(1)
 		go func(ctx context.Context, s repository.Storage, size int64) {
-			inCtx, cancel := context.WithTimeout(ctx, MaxResponseTime)
-
-			defer cancel()
 			defer wg.Done()
 
-			conn, err := grpc.DialContext(inCtx, s.Host)
+			client, err := newStorageClient(connCtx, s.Host)
 			if err != nil {
 				return
 			}
-
-			client := protocol.NewStorageClient(conn)
-			resp, err := client.CheckReadiness(inCtx, &protocol.CheckReadinessRequest{
+			resp, err := client.CheckReadiness(connCtx, &protocol.CheckReadinessRequest{
 				Size: size,
 			})
 			if err != nil || !resp.Ready {
@@ -158,7 +156,23 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 			})
 		}(ctx, *s, maxPartSize)
 	}
-	wg.Wait()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-time.After(MaxResponseTime):
+		connCancel()
+		<-done
+	case <-done:
+	}
+
+	if connCtx.Err() != nil {
+		return nil, connCtx.Err()
+	}
 
 	if ldr.LenFileParts() < m.minStorages {
 		return nil, fmt.Errorf("not enough storages")
@@ -173,6 +187,9 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 		return nil, err
 	}
 
+	connCtx, connCancel := context.WithCancel(ctx)
+	defer connCancel()
+
 	ldr := NewLoader(file.Size)
 
 	var wg sync.WaitGroup
@@ -186,15 +203,11 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 				return
 			}
 
-			inCtx, cancel := context.WithTimeout(ctx, MaxResponseTime)
-			defer cancel()
-
-			conn, err := grpc.DialContext(inCtx, storage.Host)
+			client, err := newStorageClient(connCtx, storage.Host)
 			if err != nil {
 				return
 			}
 
-			client := protocol.NewStorageClient(conn)
 			resp, err := client.CheckFilePartExistence(ctx, &protocol.CheckFilePartExistenceRequest{
 				Id: fp.RemoteID,
 			})
@@ -214,11 +227,35 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 			})
 		}(ctx, *fileParts[i])
 	}
-	wg.Wait()
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-time.After(MaxResponseTime):
+		connCancel()
+		<-done
+	case <-done:
+	}
+
+	if connCtx.Err() != nil {
+		return nil, connCtx.Err()
+	}
 
 	if ldr.LenFileParts() != len(fileParts) {
 		return nil, fmt.Errorf("not enough parts")
 	}
 
 	return ldr, nil
+}
+
+func newStorageClient(ctx context.Context, host string) (protocol.StorageClient, error) {
+	conn, err := grpc.DialContext(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+
+	return protocol.NewStorageClient(conn), nil
 }
