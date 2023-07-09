@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -17,8 +18,8 @@ type FilePart struct {
 	RemoteID  string
 	StorageID string
 	Client    protocol.StorageClient
-
-	Hash string
+	Size      int64
+	Hash      string
 }
 
 type loader struct {
@@ -56,8 +57,28 @@ func (l *loader) Upload(ctx context.Context, reader io.Reader) error {
 	return nil
 }
 
-func (l *loader) Download(ctx context.Context) (io.Reader, error) {
-	return nil, nil
+func (l *loader) Download(ctx context.Context, writer io.Writer) error {
+	targetSize := l.size
+	sent := int64(0)
+	fileParts := l.GetFileParts()
+
+	for _, fp := range fileParts {
+		n, err := l.getByChunks(ctx, &fp, writer, ChunkSize)
+		if err != nil {
+			return err
+		}
+		sent += int64(n)
+
+		if sent > targetSize {
+			return fmt.Errorf("sent more than target size")
+		}
+	}
+
+	if sent != targetSize {
+		return fmt.Errorf("sent less than target size")
+	}
+
+	return nil
 }
 
 func (l *loader) AddFilePart(fp *FilePart) {
@@ -109,6 +130,7 @@ func (l *loader) sendByChunks(ctx context.Context, part *FilePart, pipe io.Reade
 			}
 			part.RemoteID = resp.Id
 			part.Hash = resp.Hash
+			part.Size = fullSize
 		}()
 
 		for data := range dataCh {
@@ -168,4 +190,55 @@ func (l *loader) sendByChunks(ctx context.Context, part *FilePart, pipe io.Reade
 	}
 
 	return gErr
+}
+
+func (l *loader) getByChunks(ctx context.Context, part *FilePart, pipe io.Writer, chunkSize int64) (int, error) {
+	var wg sync.WaitGroup
+	ch := make(chan []byte, 1)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for data := range ch {
+			if _, err := pipe.Write(data); err != nil {
+				// todo: handle the err
+				return
+			}
+		}
+	}()
+
+	resp, err := part.Client.GetFile(ctx, &protocol.GetFileRequest{Id: part.RemoteID, ChunkSize: ChunkSize})
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		_ = resp.CloseSend()
+	}()
+
+	received := 0
+	for {
+		partData, err := resp.Recv()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return 0, err
+		}
+
+		ch <- partData.Data
+		received += len(partData.Data)
+
+		if int64(received) > part.Size {
+			return 0, fmt.Errorf("received more than expected")
+		}
+	}
+
+	close(ch)
+	wg.Wait()
+
+	if int64(received) < part.Size {
+		return 0, fmt.Errorf("received less than expected")
+	}
+
+	return received, nil
 }

@@ -26,6 +26,7 @@ CREATE TABLE file_parts (
     remote_id varchar(255) NOT NULL DEFAULT '',
     seq INTEGER NOT NULL DEFAULT 0,
     storage_id uuid NOT NULL REFERENCES storages(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    size INTEGER NOT NULL DEFAULT 0,
     hash VARCHAR(200) NOT NULL DEFAULT '',
     created_at timestamptz NOT NULL DEFAULT NOW(),
     updated_at timestamptz NOT NULL DEFAULT NOW()

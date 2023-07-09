@@ -82,7 +82,7 @@ func (t *testSuite) TestCreateFileParts() {
 	t.Require().NoError(err)
 
 	for i := 0; i < 10; i++ {
-		filePart := repository.NewFilePart(file.ID, "", i, storage.ID, uuid.NewString())
+		filePart := repository.NewFilePart(file.ID, "", i, 100, storage.ID, uuid.NewString())
 		err = t.repository.CreateFilePart(ctx, &filePart)
 		t.Require().NoError(err)
 	}

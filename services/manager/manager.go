@@ -31,7 +31,7 @@ type FileInfo struct {
 type Manager interface {
 	Prepare(ctx context.Context) (string, error)
 	Store(ctx context.Context, id string, info FileInfo, reader io.Reader) error
-	Load(ctx context.Context, name string) (io.Reader, error)
+	Load(ctx context.Context, name string, writer io.Writer) error
 }
 
 func New(repo repository.Repository) Manager {
@@ -85,7 +85,7 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 
 	var dbFileParts = make([]repository.FilePart, 0, ldr.LenFileParts())
 	for seq, fp := range ldr.GetFileParts() {
-		part := repository.NewFilePart(file.ID, fp.RemoteID, seq, fp.StorageID, fp.Hash)
+		part := repository.NewFilePart(file.ID, fp.RemoteID, seq, fp.Size, fp.StorageID, fp.Hash)
 		dbFileParts = append(dbFileParts, part)
 	}
 
@@ -100,21 +100,21 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 	return nil
 }
 
-func (m *manager) Load(ctx context.Context, name string) (io.Reader, error) {
+func (m *manager) Load(ctx context.Context, name string, writer io.Writer) error {
 	file, err := m.repo.GetFileByName(ctx, name)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			return nil, ErrNotFound
+			return ErrNotFound
 		}
-		return nil, err
+		return err
 	}
 
 	ldr, err := m.prepareLoaderForDownload(ctx, file)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return ldr.Download(ctx)
+	return ldr.Download(ctx, writer)
 }
 
 func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*loader, error) {
@@ -223,6 +223,7 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 				StorageID: storage.ID,
 				Client:    client,
 				RemoteID:  fp.RemoteID,
+				Size:      fp.Size,
 				Hash:      fp.Hash,
 			})
 		}(ctx, *fileParts[i])

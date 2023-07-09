@@ -52,6 +52,7 @@ message UploadFileResponse {
 
 message GetFileRequest {
   string id = 1;
+  int64 chunkSize = 2;
 }
 
 message GetFileResponse {

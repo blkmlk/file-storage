@@ -40,19 +40,21 @@ type FilePart struct {
 	FileID    string
 	RemoteID  string
 	Seq       int
+	Size      int64
 	Hash      string
 	StorageID string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
 
-func NewFilePart(fileID, remoteID string, seq int, storageID, hash string) FilePart {
+func NewFilePart(fileID, remoteID string, seq int, size int64, storageID, hash string) FilePart {
 	now := time.Now()
 	return FilePart{
 		ID:        uuid.NewString(),
 		FileID:    fileID,
 		RemoteID:  remoteID,
 		Seq:       seq,
+		Size:      size,
 		Hash:      hash,
 		StorageID: storageID,
 		CreatedAt: now,
