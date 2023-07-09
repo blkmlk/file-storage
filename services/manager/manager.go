@@ -182,7 +182,7 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 }
 
 func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository.File) (*loader, error) {
-	fileParts, err := m.repo.FindFileParts(ctx, file.ID)
+	fileParts, err := m.repo.FindOrderedFileParts(ctx, file.ID)
 	if err != nil {
 		return nil, err
 	}

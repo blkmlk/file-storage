@@ -33,7 +33,7 @@ type Repository interface {
 
 	CreateFilePart(ctx context.Context, filePart *FilePart) error
 	CreateFileParts(ctx context.Context, fileParts []FilePart) error
-	FindFileParts(ctx context.Context, fileID string) ([]*FilePart, error)
+	FindOrderedFileParts(ctx context.Context, fileID string) ([]*FilePart, error)
 }
 
 type storage struct {
@@ -150,7 +150,7 @@ func (s storage) CreateFileParts(ctx context.Context, fileParts []FilePart) erro
 	return nil
 }
 
-func (s storage) FindFileParts(ctx context.Context, fileID string) ([]*FilePart, error) {
+func (s storage) FindOrderedFileParts(ctx context.Context, fileID string) ([]*FilePart, error) {
 	var fileParts []*FilePart
 	tx := s.db.WithContext(ctx).Table("file_parts").
 		Where("file_id = ?", fileID).Order("seq ASC").Find(&fileParts)

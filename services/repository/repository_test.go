@@ -87,7 +87,7 @@ func (t *testSuite) TestCreateFileParts() {
 		t.Require().NoError(err)
 	}
 
-	foundFileParts, err := t.repository.FindFileParts(ctx, file.ID)
+	foundFileParts, err := t.repository.FindOrderedFileParts(ctx, file.ID)
 	t.Require().NoError(err)
 	t.Require().Len(foundFileParts, 10)
 }
