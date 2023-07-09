@@ -3,7 +3,7 @@ package controllers
 import (
 	"net/http"
 
-	"github.com/blkmlk/file-storage/services/repository"
+	"github.com/blkmlk/file-storage/internal/services/repository"
 
 	"github.com/blkmlk/file-storage/services/splitter"
 	"github.com/gin-gonic/gin"

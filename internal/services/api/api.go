@@ -3,9 +3,10 @@ package api
 import (
 	"net"
 
+	controllers2 "github.com/blkmlk/file-storage/internal/services/api/controllers"
+
 	"github.com/blkmlk/file-storage/env"
 	"github.com/blkmlk/file-storage/protocol"
-	"github.com/blkmlk/file-storage/services/api/controllers"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
 )
@@ -22,15 +23,15 @@ const (
 type api struct {
 	restHost           string
 	protocolHost       string
-	restController     *controllers.RestController
-	protocolController *controllers.ProtocolController
+	restController     *controllers2.RestController
+	protocolController *controllers2.ProtocolController
 	restServer         *gin.Engine
 	grpcServer         *grpc.Server
 }
 
 func New(
-	restController *controllers.RestController,
-	protocolController *controllers.ProtocolController,
+	restController *controllers2.RestController,
+	protocolController *controllers2.ProtocolController,
 ) (API, error) {
 	restHost, err := env.Get(env.RestHost)
 	if err != nil {

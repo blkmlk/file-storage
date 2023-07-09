@@ -8,10 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/blkmlk/file-storage/protocol"
-	"google.golang.org/grpc"
+	repository2 "github.com/blkmlk/file-storage/internal/services/repository"
 
-	"github.com/blkmlk/file-storage/services/repository"
+	"github.com/blkmlk/file-storage/protocol"
 )
 
 const (
@@ -34,21 +33,23 @@ type Manager interface {
 	Load(ctx context.Context, name string, writer io.Writer) error
 }
 
-func New(repo repository.Repository) Manager {
+func New(repo repository2.Repository, clientFactory ClientFactory) Manager {
 	return &manager{
-		repo: repo,
+		repo:          repo,
+		clientFactory: clientFactory,
 	}
 }
 
 type manager struct {
-	repo        repository.Repository
-	minStorages int
+	repo          repository2.Repository
+	clientFactory ClientFactory
+	minStorages   int
 }
 
 func (m *manager) Prepare(ctx context.Context) (string, error) {
-	newFile := repository.NewFile()
+	newFile := repository2.NewFile()
 	if err := m.repo.CreateFile(ctx, &newFile); err != nil {
-		if errors.Is(err, repository.ErrAlreadyExists) {
+		if errors.Is(err, repository2.ErrAlreadyExists) {
 			return "", ErrExists
 		}
 		return "", err
@@ -59,7 +60,7 @@ func (m *manager) Prepare(ctx context.Context) (string, error) {
 func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reader io.Reader) error {
 	// todo: add cache name and id locks
 	if _, err := m.repo.GetFileByName(ctx, info.Name); err != nil {
-		if errors.Is(err, repository.ErrAlreadyExists) {
+		if errors.Is(err, repository2.ErrAlreadyExists) {
 			return ErrExists
 		}
 		return err
@@ -70,7 +71,7 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 		return err
 	}
 
-	if file.Status != repository.FileStatusCreated {
+	if file.Status != repository2.FileStatusCreated {
 		return fmt.Errorf("wrong status")
 	}
 
@@ -83,9 +84,9 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 		return err
 	}
 
-	var dbFileParts = make([]repository.FilePart, 0, ldr.LenFileParts())
+	var dbFileParts = make([]repository2.FilePart, 0, ldr.LenFileParts())
 	for seq, fp := range ldr.GetFileParts() {
-		part := repository.NewFilePart(file.ID, fp.RemoteID, seq, fp.Size, fp.StorageID, fp.Hash)
+		part := repository2.NewFilePart(file.ID, fp.RemoteID, seq, fp.Size, fp.StorageID, fp.Hash)
 		dbFileParts = append(dbFileParts, part)
 	}
 
@@ -93,7 +94,7 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 		return err
 	}
 
-	if err = m.repo.UpdateFileStatus(ctx, file.ID, info.Name, info.Size, repository.FileStatusUploaded); err != nil {
+	if err = m.repo.UpdateFileStatus(ctx, file.ID, info.Name, info.Size, repository2.FileStatusUploaded); err != nil {
 		return err
 	}
 
@@ -103,7 +104,7 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 func (m *manager) Load(ctx context.Context, name string, writer io.Writer) error {
 	file, err := m.repo.GetFileByName(ctx, name)
 	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
+		if errors.Is(err, repository2.ErrNotFound) {
 			return ErrNotFound
 		}
 		return err
@@ -136,10 +137,10 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 	maxPartSize := info.Size / int64(m.minStorages)
 	for _, s := range storages {
 		wg.Add(1)
-		go func(ctx context.Context, s repository.Storage, size int64) {
+		go func(ctx context.Context, s repository2.Storage, size int64) {
 			defer wg.Done()
 
-			client, err := newStorageClient(connCtx, s.Host)
+			client, err := m.clientFactory.NewStorageClient(connCtx, s.Host)
 			if err != nil {
 				return
 			}
@@ -181,7 +182,7 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 	return ldr, nil
 }
 
-func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository.File) (*loader, error) {
+func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository2.File) (*loader, error) {
 	fileParts, err := m.repo.FindOrderedFileParts(ctx, file.ID)
 	if err != nil {
 		return nil, err
@@ -195,7 +196,7 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 	var wg sync.WaitGroup
 	for i := 0; i < len(fileParts); i++ {
 		wg.Add(1)
-		go func(ctx context.Context, fp repository.FilePart) {
+		go func(ctx context.Context, fp repository2.FilePart) {
 			defer wg.Done()
 
 			storage, err := m.repo.GetStorage(ctx, fp.StorageID)
@@ -203,7 +204,7 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 				return
 			}
 
-			client, err := newStorageClient(connCtx, storage.Host)
+			client, err := m.clientFactory.NewStorageClient(connCtx, storage.Host)
 			if err != nil {
 				return
 			}
@@ -250,13 +251,4 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 	}
 
 	return ldr, nil
-}
-
-func newStorageClient(ctx context.Context, host string) (protocol.StorageClient, error) {
-	conn, err := grpc.DialContext(ctx, host)
-	if err != nil {
-		return nil, err
-	}
-
-	return protocol.NewStorageClient(conn), nil
 }

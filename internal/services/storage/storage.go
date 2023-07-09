@@ -1,6 +1,8 @@
 package storage
 
-import "github.com/blkmlk/file-storage/services/repository"
+import (
+	"github.com/blkmlk/file-storage/internal/services/repository"
+)
 
 type Storage interface {
 	SaveFile(file []byte) error
