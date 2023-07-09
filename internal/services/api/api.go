@@ -17,7 +17,8 @@ type API interface {
 }
 
 const (
-	PathUploadFile = "/api/v1/upload"
+	PathGetUploadFile  = "/api/v1/upload"
+	PathPostUploadFile = "/api/v1/upload/:id"
 )
 
 type api struct {
@@ -58,7 +59,8 @@ func New(
 }
 
 func (a *api) initRest() {
-	a.restServer.POST(PathUploadFile, a.restController.UploadFile)
+	a.restServer.GET(PathGetUploadFile, a.restController.GetUploadLink)
+	a.restServer.POST(PathPostUploadFile, a.restController.PostUploadFile)
 }
 
 func (a *api) initGrpc() {

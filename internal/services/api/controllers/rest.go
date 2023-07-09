@@ -1,58 +1,87 @@
 package controllers
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
+
+	"github.com/blkmlk/file-storage/env"
+
+	"github.com/blkmlk/file-storage/internal/services/manager"
 
 	"github.com/blkmlk/file-storage/internal/services/repository"
 
-	"github.com/blkmlk/file-storage/services/splitter"
 	"github.com/gin-gonic/gin"
 )
 
 type RestController struct {
-	repo     repository.Repository
-	splitter splitter.Splitter
+	repo           repository.Repository
+	fileManager    manager.Manager
+	uploadFileHost string
+}
+
+type GetUploadLinkResponse struct {
+	UploadLink string `json:"upload_link"`
 }
 
 func NewUploadController(
 	repo repository.Repository,
-	splitter splitter.Splitter,
+	fileManager manager.Manager,
 ) (*RestController, error) {
+	uploadFileHost, err := env.Get(env.UploadFileHost)
+	if err != nil {
+		return nil, err
+	}
+
 	return &RestController{
-		repo:     repo,
-		splitter: splitter,
+		repo:           repo,
+		fileManager:    fileManager,
+		uploadFileHost: uploadFileHost,
 	}, nil
 }
 
-func (c *RestController) UploadFile(ctx *gin.Context) {
-	mp, err := ctx.FormFile("file")
+func (c *RestController) GetUploadLink(ctx *gin.Context) {
+	id, err := c.fileManager.Prepare(ctx)
 	if err != nil {
 		ctx.Status(http.StatusInternalServerError)
 		return
 	}
 
-	uploader, err := c.splitter.GetUploader(ctx, splitter.GetUploaderInput{
-		Name:        mp.Filename,
-		Size:        mp.Size,
-		MinStorages: 5,
-		NumStorages: 6,
+	uploadUrl := fmt.Sprintf("https://%s/api/v1/upload/%s", c.uploadFileHost, id)
+
+	ctx.JSON(http.StatusCreated, GetUploadLinkResponse{
+		UploadLink: uploadUrl,
 	})
+}
+
+func (c *RestController) PostUploadFile(ctx *gin.Context) {
+	file, err := ctx.FormFile("file")
 	if err != nil {
 		ctx.Status(http.StatusInternalServerError)
 		return
 	}
 
-	fp, err := mp.Open()
+	id := ctx.Param("id")
+
+	pipe, err := file.Open()
 	if err != nil {
 		ctx.Status(http.StatusInternalServerError)
 		return
 	}
 
-	if err = uploader.Upload(ctx, fp); err != nil {
+	fileInfo := manager.FileInfo{
+		Name: file.Filename,
+		Size: file.Size,
+	}
+
+	err = c.fileManager.Store(ctx, id, fileInfo, pipe)
+	if err != nil {
+		if errors.Is(err, manager.ErrExists) {
+		}
+		if errors.Is(err, manager.ErrNotFound) {
+		}
 		ctx.Status(http.StatusInternalServerError)
 		return
 	}
-
 	ctx.Status(http.StatusCreated)
-	return
 }

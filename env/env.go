@@ -6,9 +6,10 @@ import (
 )
 
 const (
-	DatabaseURL  = "DATABASE_URL"
-	RestHost     = "REST_HOST"
-	ProtocolHost = "PROTOCOL_HOST"
+	DatabaseURL    = "DATABASE_URL"
+	UploadFileHost = "UPLOAD_FILE_HOST"
+	RestHost       = "REST_HOST"
+	ProtocolHost   = "PROTOCOL_HOST"
 )
 
 func NewErrNotSet(env string) error {
