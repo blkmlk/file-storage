@@ -109,7 +109,9 @@ var Uploader_ServiceDesc = grpc.ServiceDesc{
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type StorageClient interface {
 	CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error)
+	CheckFilePartExistence(ctx context.Context, in *CheckFilePartExistenceRequest, opts ...grpc.CallOption) (*CheckFilePartExistenceResponse, error)
 	UploadFile(ctx context.Context, opts ...grpc.CallOption) (Storage_UploadFileClient, error)
+	GetFile(ctx context.Context, in *GetFileRequest, opts ...grpc.CallOption) (Storage_GetFileClient, error)
 }
 
 type storageClient struct {
@@ -123,6 +125,15 @@ func NewStorageClient(cc grpc.ClientConnInterface) StorageClient {
 func (c *storageClient) CheckReadiness(ctx context.Context, in *CheckReadinessRequest, opts ...grpc.CallOption) (*CheckReadinessResponse, error) {
 	out := new(CheckReadinessResponse)
 	err := c.cc.Invoke(ctx, "/protocol.Storage/CheckReadiness", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *storageClient) CheckFilePartExistence(ctx context.Context, in *CheckFilePartExistenceRequest, opts ...grpc.CallOption) (*CheckFilePartExistenceResponse, error) {
+	out := new(CheckFilePartExistenceResponse)
+	err := c.cc.Invoke(ctx, "/protocol.Storage/CheckFilePartExistence", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -163,12 +174,46 @@ func (x *storageUploadFileClient) CloseAndRecv() (*UploadFileResponse, error) {
 	return m, nil
 }
 
+func (c *storageClient) GetFile(ctx context.Context, in *GetFileRequest, opts ...grpc.CallOption) (Storage_GetFileClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Storage_ServiceDesc.Streams[1], "/protocol.Storage/GetFile", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &storageGetFileClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Storage_GetFileClient interface {
+	Recv() (*GetFileResponse, error)
+	grpc.ClientStream
+}
+
+type storageGetFileClient struct {
+	grpc.ClientStream
+}
+
+func (x *storageGetFileClient) Recv() (*GetFileResponse, error) {
+	m := new(GetFileResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // StorageServer is the server API for Storage service.
 // All implementations must embed UnimplementedStorageServer
 // for forward compatibility
 type StorageServer interface {
 	CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error)
+	CheckFilePartExistence(context.Context, *CheckFilePartExistenceRequest) (*CheckFilePartExistenceResponse, error)
 	UploadFile(Storage_UploadFileServer) error
+	GetFile(*GetFileRequest, Storage_GetFileServer) error
 	mustEmbedUnimplementedStorageServer()
 }
 
@@ -179,8 +224,14 @@ type UnimplementedStorageServer struct {
 func (UnimplementedStorageServer) CheckReadiness(context.Context, *CheckReadinessRequest) (*CheckReadinessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CheckReadiness not implemented")
 }
+func (UnimplementedStorageServer) CheckFilePartExistence(context.Context, *CheckFilePartExistenceRequest) (*CheckFilePartExistenceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CheckFilePartExistence not implemented")
+}
 func (UnimplementedStorageServer) UploadFile(Storage_UploadFileServer) error {
 	return status.Errorf(codes.Unimplemented, "method UploadFile not implemented")
+}
+func (UnimplementedStorageServer) GetFile(*GetFileRequest, Storage_GetFileServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetFile not implemented")
 }
 func (UnimplementedStorageServer) mustEmbedUnimplementedStorageServer() {}
 
@@ -213,6 +264,24 @@ func _Storage_CheckReadiness_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Storage_CheckFilePartExistence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckFilePartExistenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageServer).CheckFilePartExistence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/protocol.Storage/CheckFilePartExistence",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageServer).CheckFilePartExistence(ctx, req.(*CheckFilePartExistenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Storage_UploadFile_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(StorageServer).UploadFile(&storageUploadFileServer{stream})
 }
@@ -239,6 +308,27 @@ func (x *storageUploadFileServer) Recv() (*UploadFileRequest, error) {
 	return m, nil
 }
 
+func _Storage_GetFile_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetFileRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StorageServer).GetFile(m, &storageGetFileServer{stream})
+}
+
+type Storage_GetFileServer interface {
+	Send(*GetFileResponse) error
+	grpc.ServerStream
+}
+
+type storageGetFileServer struct {
+	grpc.ServerStream
+}
+
+func (x *storageGetFileServer) Send(m *GetFileResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // Storage_ServiceDesc is the grpc.ServiceDesc for Storage service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -250,12 +340,21 @@ var Storage_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "CheckReadiness",
 			Handler:    _Storage_CheckReadiness_Handler,
 		},
+		{
+			MethodName: "CheckFilePartExistence",
+			Handler:    _Storage_CheckFilePartExistence_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "UploadFile",
 			Handler:       _Storage_UploadFile_Handler,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "GetFile",
+			Handler:       _Storage_GetFile_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "message.proto",

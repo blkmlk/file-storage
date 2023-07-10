@@ -3,48 +3,37 @@ package api
 import (
 	"net"
 
-	"github.com/blkmlk/file-storage/env"
+	controllers2 "github.com/blkmlk/file-storage/internal/services/api/controllers"
+
 	"github.com/blkmlk/file-storage/protocol"
-	"github.com/blkmlk/file-storage/services/api/controllers"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
 )
 
 type API interface {
-	Start() error
+	Start(restHost, protocolHost string) error
 	Stop() error
 }
 
 const (
-	PathUploadFile = "/api/v1/upload"
+	PathGetUploadFile   = "/api/v1/upload"
+	PathPostUploadFile  = "/api/v1/upload/:id"
+	PathGetDownloadFile = "/api/v1/download/:name"
 )
 
 type api struct {
-	restHost           string
-	protocolHost       string
-	restController     *controllers.RestController
-	protocolController *controllers.ProtocolController
+	restController     *controllers2.RestController
+	protocolController *controllers2.ProtocolController
 	restServer         *gin.Engine
 	grpcServer         *grpc.Server
 }
 
 func New(
-	restController *controllers.RestController,
-	protocolController *controllers.ProtocolController,
+	restController *controllers2.RestController,
+	protocolController *controllers2.ProtocolController,
 ) (API, error) {
-	restHost, err := env.Get(env.RestHost)
-	if err != nil {
-		return nil, err
-	}
-
-	protocolHost, err := env.Get(env.ProtocolHost)
-	if err != nil {
-		return nil, err
-	}
 
 	a := api{
-		restHost:           restHost,
-		protocolHost:       protocolHost,
 		restController:     restController,
 		protocolController: protocolController,
 		restServer:         gin.Default(),
@@ -57,7 +46,9 @@ func New(
 }
 
 func (a *api) initRest() {
-	a.restServer.POST(PathUploadFile, a.restController.UploadFile)
+	a.restServer.GET(PathGetUploadFile, a.restController.GetUploadLink)
+	a.restServer.POST(PathPostUploadFile, a.restController.PostUploadFile)
+	a.restServer.GET(PathGetDownloadFile, a.restController.GetDownloadFile)
 }
 
 func (a *api) initGrpc() {
@@ -65,8 +56,8 @@ func (a *api) initGrpc() {
 	protocol.RegisterUploaderServer(a.grpcServer, a.protocolController)
 }
 
-func (a *api) Start() error {
-	listener, err := net.Listen("tcp", a.protocolHost)
+func (a *api) Start(restHost, protocolHost string) error {
+	listener, err := net.Listen("tcp", protocolHost)
 	if err != nil {
 		return err
 	}
@@ -78,7 +69,7 @@ func (a *api) Start() error {
 	}()
 
 	go func() {
-		errs <- a.restServer.Run(a.restHost)
+		errs <- a.restServer.Run(restHost)
 	}()
 
 	return <-errs
