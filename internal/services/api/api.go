@@ -35,7 +35,7 @@ func New(
 	restController *controllers2.RestController,
 	protocolController *controllers2.ProtocolController,
 ) (API, error) {
-	restHost, err := env.Get(env.RestHost)
+	restHost, err := env.Get(env.HOST)
 	if err != nil {
 		return nil, err
 	}
