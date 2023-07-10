@@ -139,9 +139,6 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 		return nil, fmt.Errorf("not enough storages")
 	}
 
-	connCtx, connCancel := context.WithCancel(ctx)
-	defer connCancel()
-
 	ldr := NewLoader(info.Size)
 
 	var wg sync.WaitGroup
@@ -151,11 +148,11 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 		go func(ctx context.Context, s repository.Storage, size int64) {
 			defer wg.Done()
 
-			client, err := m.clientFactory.NewStorageClient(connCtx, s.Host)
+			client, err := m.clientFactory.NewStorageClient(ctx, s.Host)
 			if err != nil {
 				return
 			}
-			reqCtx, cancel := context.WithTimeout(connCtx, MaxResponseTime)
+			reqCtx, cancel := context.WithTimeout(ctx, MaxResponseTime)
 			defer cancel()
 
 			resp, err := client.CheckReadiness(reqCtx, &protocol.CheckReadinessRequest{
@@ -173,8 +170,8 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 	}
 	wg.Wait()
 
-	if connCtx.Err() != nil {
-		return nil, connCtx.Err()
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 
 	if ldr.LenFileParts() < m.minStorages {
@@ -190,9 +187,6 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 		return nil, err
 	}
 
-	connCtx, connCancel := context.WithCancel(ctx)
-	defer connCancel()
-
 	ldr := NewLoader(file.Size)
 
 	var wg sync.WaitGroup
@@ -206,11 +200,11 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 				return
 			}
 
-			client, err := m.clientFactory.NewStorageClient(connCtx, storage.Host)
+			client, err := m.clientFactory.NewStorageClient(ctx, storage.Host)
 			if err != nil {
 				return
 			}
-			reqCtx, cancel := context.WithTimeout(connCtx, MaxResponseTime)
+			reqCtx, cancel := context.WithTimeout(ctx, MaxResponseTime)
 			defer cancel()
 
 			resp, err := client.CheckFilePartExistence(reqCtx, &protocol.CheckFilePartExistenceRequest{
@@ -235,8 +229,8 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 	}
 	wg.Wait()
 
-	if connCtx.Err() != nil {
-		return nil, connCtx.Err()
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 
 	if ldr.LenFileParts() != len(fileParts) {
