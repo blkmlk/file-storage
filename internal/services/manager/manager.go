@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blkmlk/file-storage/internal/services/cache"
+
 	repository2 "github.com/blkmlk/file-storage/internal/services/repository"
 
 	"github.com/blkmlk/file-storage/protocol"
@@ -33,8 +35,13 @@ type Manager interface {
 	Load(ctx context.Context, name string, writer io.Writer) error
 }
 
-func New(repo repository2.Repository, clientFactory ClientFactory) Manager {
+func New(
+	repo repository2.Repository,
+	cache cache.Cache,
+	clientFactory ClientFactory,
+) Manager {
 	return &manager{
+		cache:         cache,
 		repo:          repo,
 		clientFactory: clientFactory,
 	}
@@ -42,6 +49,7 @@ func New(repo repository2.Repository, clientFactory ClientFactory) Manager {
 
 type manager struct {
 	repo          repository2.Repository
+	cache         cache.Cache
 	clientFactory ClientFactory
 	minStorages   int
 }
@@ -58,7 +66,12 @@ func (m *manager) Prepare(ctx context.Context) (string, error) {
 }
 
 func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reader io.Reader) error {
-	// todo: add cache name and id locks
+	keys := []string{fileID, info.Name}
+	if err := m.cache.Lock(keys); err != nil {
+		return fmt.Errorf("file is already being stored")
+	}
+	defer m.cache.Unlock(keys)
+
 	if _, err := m.repo.GetFileByName(ctx, info.Name); err != nil {
 		if errors.Is(err, repository2.ErrAlreadyExists) {
 			return ErrExists
