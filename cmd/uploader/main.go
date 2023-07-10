@@ -22,9 +22,12 @@ func main() {
 	container.Provide(manager.NewGRPCClientFactory)
 
 	var listener api.API
-	container.Invoke(func(a api.API) {
+	err := container.Invoke(func(a api.API) {
 		listener = a
 	})
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	restHost, err := env.Get(env.RestHost)
 	if err != nil {
@@ -36,7 +39,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := listener.Start(restHost, protocolHost); err != nil {
-		panic(err)
+	if err = listener.Start(restHost, protocolHost); err != nil {
+		log.Fatal(err)
 	}
 }
