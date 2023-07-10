@@ -11,6 +11,8 @@ const (
 	RestHost       = "REST_HOST"
 	ProtocolHost   = "PROTOCOL_HOST"
 	FSRootPath     = "FS_ROOT_PATH"
+	StorageID      = "STORAGE_ID"
+	StorageHost    = "STORAGE_HOST"
 	RegistryHost   = "REGISTRY_HOST"
 )
 

@@ -44,7 +44,13 @@ func New(fileStorage filestorage.FileStorage) (*Storage, error) {
 		return nil, err
 	}
 
+	storageID, err := env.Get(env.StorageID)
+	if err != nil {
+		return nil, err
+	}
+
 	s := &Storage{
+		id:           storageID,
 		registryHost: registryHost,
 		storageHost:  storageHost,
 		fileStorage:  fileStorage,
@@ -62,7 +68,7 @@ func New(fileStorage filestorage.FileStorage) (*Storage, error) {
 }
 
 func (s *Storage) register(ctx context.Context) error {
-	conn, err := grpc.DialContext(ctx, s.registryHost)
+	conn, err := grpc.DialContext(ctx, s.registryHost, grpc.WithInsecure())
 	if err != nil {
 		return err
 	}

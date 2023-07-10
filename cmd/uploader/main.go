@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 
+	"github.com/blkmlk/file-storage/internal/services/repository"
+
 	"github.com/blkmlk/file-storage/internal/services/cache"
 
 	"github.com/blkmlk/file-storage/deps"
@@ -17,6 +19,7 @@ func main() {
 	container := dig.New()
 
 	container.Provide(deps.NewDB)
+	container.Provide(repository.New)
 	container.Provide(controllers2.NewUploadController)
 	container.Provide(controllers2.NewProtocolController)
 	container.Provide(api.New)

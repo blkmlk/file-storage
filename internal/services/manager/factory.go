@@ -26,7 +26,7 @@ type grpcClientFactory struct {
 }
 
 func (g grpcClientFactory) NewStorageClient(ctx context.Context, host string) (protocol.StorageClient, error) {
-	conn, err := grpc.DialContext(ctx, host)
+	conn, err := grpc.DialContext(ctx, host, grpc.WithInsecure())
 	if err != nil {
 		return nil, err
 	}
