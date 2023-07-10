@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 
+	"github.com/blkmlk/file-storage/internal/services/cache"
+
 	"github.com/blkmlk/file-storage/deps"
 	"github.com/blkmlk/file-storage/env"
 	"github.com/blkmlk/file-storage/internal/services/api"
@@ -20,6 +22,7 @@ func main() {
 	container.Provide(api.New)
 	container.Provide(manager.New)
 	container.Provide(manager.NewGRPCClientFactory)
+	container.Provide(cache.NewMapCache)
 
 	var listener api.API
 	err := container.Invoke(func(a api.API) {
