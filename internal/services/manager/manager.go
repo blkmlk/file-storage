@@ -9,9 +9,7 @@ import (
 	"time"
 
 	"github.com/blkmlk/file-storage/internal/services/cache"
-
-	repository2 "github.com/blkmlk/file-storage/internal/services/repository"
-
+	"github.com/blkmlk/file-storage/internal/services/repository"
 	"github.com/blkmlk/file-storage/protocol"
 )
 
@@ -36,7 +34,7 @@ type Manager interface {
 }
 
 func New(
-	repo repository2.Repository,
+	repo repository.Repository,
 	cache cache.Cache,
 	clientFactory ClientFactory,
 ) Manager {
@@ -48,16 +46,16 @@ func New(
 }
 
 type manager struct {
-	repo          repository2.Repository
+	repo          repository.Repository
 	cache         cache.Cache
 	clientFactory ClientFactory
 	minStorages   int
 }
 
 func (m *manager) Prepare(ctx context.Context) (string, error) {
-	newFile := repository2.NewFile()
+	newFile := repository.NewFile()
 	if err := m.repo.CreateFile(ctx, &newFile); err != nil {
-		if errors.Is(err, repository2.ErrAlreadyExists) {
+		if errors.Is(err, repository.ErrAlreadyExists) {
 			return "", ErrExists
 		}
 		return "", err
@@ -73,7 +71,7 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 	defer m.cache.Unlock(keys)
 
 	if _, err := m.repo.GetFileByName(ctx, info.Name); err != nil {
-		if errors.Is(err, repository2.ErrAlreadyExists) {
+		if errors.Is(err, repository.ErrAlreadyExists) {
 			return ErrExists
 		}
 		return err
@@ -84,7 +82,7 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 		return err
 	}
 
-	if file.Status != repository2.FileStatusCreated {
+	if file.Status != repository.FileStatusCreated {
 		return fmt.Errorf("wrong status")
 	}
 
@@ -97,9 +95,9 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 		return err
 	}
 
-	var dbFileParts = make([]repository2.FilePart, 0, ldr.LenFileParts())
+	var dbFileParts = make([]repository.FilePart, 0, ldr.LenFileParts())
 	for seq, fp := range ldr.GetFileParts() {
-		part := repository2.NewFilePart(file.ID, fp.RemoteID, seq, fp.Size, fp.StorageID, fp.Hash)
+		part := repository.NewFilePart(file.ID, fp.RemoteID, seq, fp.Size, fp.StorageID, fp.Hash)
 		dbFileParts = append(dbFileParts, part)
 	}
 
@@ -107,7 +105,7 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 		return err
 	}
 
-	if err = m.repo.UpdateFileStatus(ctx, file.ID, info.Name, info.Size, repository2.FileStatusUploaded); err != nil {
+	if err = m.repo.UpdateFileStatus(ctx, file.ID, info.Name, info.Size, repository.FileStatusUploaded); err != nil {
 		return err
 	}
 
@@ -117,7 +115,7 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 func (m *manager) Load(ctx context.Context, name string, writer io.Writer) error {
 	file, err := m.repo.GetFileByName(ctx, name)
 	if err != nil {
-		if errors.Is(err, repository2.ErrNotFound) {
+		if errors.Is(err, repository.ErrNotFound) {
 			return ErrNotFound
 		}
 		return err
@@ -150,14 +148,17 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 	maxPartSize := info.Size / int64(m.minStorages)
 	for _, s := range storages {
 		wg.Add(1)
-		go func(ctx context.Context, s repository2.Storage, size int64) {
+		go func(ctx context.Context, s repository.Storage, size int64) {
 			defer wg.Done()
 
 			client, err := m.clientFactory.NewStorageClient(connCtx, s.Host)
 			if err != nil {
 				return
 			}
-			resp, err := client.CheckReadiness(connCtx, &protocol.CheckReadinessRequest{
+			reqCtx, cancel := context.WithTimeout(connCtx, MaxResponseTime)
+			defer cancel()
+
+			resp, err := client.CheckReadiness(reqCtx, &protocol.CheckReadinessRequest{
 				Size: size,
 			})
 			if err != nil || !resp.Ready {
@@ -170,19 +171,7 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 			})
 		}(ctx, *s, maxPartSize)
 	}
-
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		done <- struct{}{}
-	}()
-
-	select {
-	case <-time.After(MaxResponseTime):
-		connCancel()
-		<-done
-	case <-done:
-	}
+	wg.Wait()
 
 	if connCtx.Err() != nil {
 		return nil, connCtx.Err()
@@ -195,7 +184,7 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 	return ldr, nil
 }
 
-func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository2.File) (*loader, error) {
+func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository.File) (*loader, error) {
 	fileParts, err := m.repo.FindOrderedFileParts(ctx, file.ID)
 	if err != nil {
 		return nil, err
@@ -209,7 +198,7 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 	var wg sync.WaitGroup
 	for i := 0; i < len(fileParts); i++ {
 		wg.Add(1)
-		go func(ctx context.Context, fp repository2.FilePart) {
+		go func(ctx context.Context, fp repository.FilePart) {
 			defer wg.Done()
 
 			storage, err := m.repo.GetStorage(ctx, fp.StorageID)
@@ -221,8 +210,10 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 			if err != nil {
 				return
 			}
+			reqCtx, cancel := context.WithTimeout(connCtx, MaxResponseTime)
+			defer cancel()
 
-			resp, err := client.CheckFilePartExistence(ctx, &protocol.CheckFilePartExistenceRequest{
+			resp, err := client.CheckFilePartExistence(reqCtx, &protocol.CheckFilePartExistenceRequest{
 				Id: fp.RemoteID,
 			})
 			if err != nil {
@@ -242,18 +233,7 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 			})
 		}(ctx, *fileParts[i])
 	}
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		done <- struct{}{}
-	}()
-
-	select {
-	case <-time.After(MaxResponseTime):
-		connCancel()
-		<-done
-	case <-done:
-	}
+	wg.Wait()
 
 	if connCtx.Err() != nil {
 		return nil, connCtx.Err()
