@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/blkmlk/file-storage/env"
@@ -44,28 +45,46 @@ func NewUploadController(
 func (c *RestController) GetUploadLink(ctx *gin.Context) {
 	id, err := c.fileManager.Prepare(ctx)
 	if err != nil {
+		log.Println(err.Error())
 		ctx.Status(http.StatusInternalServerError)
 		return
 	}
 
-	uploadUrl := fmt.Sprintf("https://%s/api/v1/upload/%s", c.uploadFileHost, id)
+	uploadUrl := fmt.Sprintf("%s/%s", c.uploadFileHost, id)
 
-	ctx.JSON(http.StatusCreated, GetUploadLinkResponse{
+	ctx.JSON(http.StatusCreated, &GetUploadLinkResponse{
 		UploadLink: uploadUrl,
 	})
 }
 
 func (c *RestController) PostUploadFile(ctx *gin.Context) {
-	file, err := ctx.FormFile("file")
+	mf, err := ctx.MultipartForm()
 	if err != nil {
+		log.Println("multi", err.Error())
 		ctx.Status(http.StatusInternalServerError)
 		return
 	}
+
+	files, ok := mf.File["file"]
+	if !ok {
+		log.Println("no file")
+		ctx.Status(http.StatusInternalServerError)
+		return
+	}
+
+	if len(files) != 1 {
+		log.Println("len")
+		ctx.Status(http.StatusInternalServerError)
+		return
+	}
+
+	file := files[0]
 
 	id := ctx.Param("id")
 
 	pipe, err := file.Open()
 	if err != nil {
+		log.Println("open", err.Error())
 		ctx.Status(http.StatusInternalServerError)
 		return
 	}
@@ -81,6 +100,7 @@ func (c *RestController) PostUploadFile(ctx *gin.Context) {
 		}
 		if errors.Is(err, manager.ErrNotFound) {
 		}
+		log.Println("fm", err.Error())
 		ctx.Status(http.StatusInternalServerError)
 		return
 	}
@@ -93,6 +113,7 @@ func (c *RestController) GetDownloadFile(ctx *gin.Context) {
 
 	file, err := c.repo.GetFileByName(ctx, fileName)
 	if err != nil {
+		log.Println(err.Error())
 		ctx.Status(http.StatusInternalServerError)
 		return
 	}
@@ -100,6 +121,7 @@ func (c *RestController) GetDownloadFile(ctx *gin.Context) {
 	ctx.DataFromReader(http.StatusOK, file.Size, "application/zip", &buffer, nil)
 
 	if err = c.fileManager.Load(ctx, fileName, &buffer); err != nil {
+		log.Println(err.Error())
 		ctx.Status(http.StatusInternalServerError)
 		return
 	}

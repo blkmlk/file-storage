@@ -20,19 +20,38 @@ services:
       context: .
       dockerfile: docker/uploader/Dockerfile
     environment:
+      - MIN_STORAGES=2
       - DATABASE_URL=postgres://root:root@postgres:5432/file-storage-test?sslmode=disable
       - REST_HOST=:9090
       - PROTOCOL_HOST=:5000
-      - UPLOAD_FILE_HOST=http://127.0.0.1:9090/api/v1/upload
+      - UPLOAD_FILE_HOST=http://127.0.0.1:19090/api/v1/upload
     ports:
-      - "9090:9090"
+      - "19090:9090"
   storage-1:
     build:
       context: .
       dockerfile: docker/storage/Dockerfile
     environment:
       - STORAGE_ID=c4a1fa41-67fd-4df0-8596-80a18137c6bb
-      - STORAGE_HOST=storage:5000
+      - STORAGE_HOST=storage-1:5000
       - REGISTRY_HOST=uploader:5000
       - PROTOCOL_HOST=:5000
       - FS_ROOT_PATH=/tmp
+    volumes:
+      - type: bind
+        source: /tmp
+        target: /tmp
+  storage-2:
+    build:
+      context: .
+      dockerfile: docker/storage/Dockerfile
+    environment:
+      - STORAGE_ID=d3a984a6-bd67-4667-8b43-f5841b54ce92
+      - STORAGE_HOST=storage-2:5000
+      - REGISTRY_HOST=uploader:5000
+      - PROTOCOL_HOST=:5000
+      - FS_ROOT_PATH=/tmp
+    volumes:
+      - type: bind
+        source: /tmp
+        target: /tmp

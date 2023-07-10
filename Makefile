@@ -1,4 +1,3 @@
-
 .PHONY: test
 test: unit-test
 
@@ -19,10 +18,11 @@ generate: go-generate
 go-generate:
 	go generate ./...
 
-.PHONY: local-run
-local-run:
+.PHONY: start
+start:
 	@echo 'Running local...'
 	docker-compose up postgres --build -d
 	docker-compose up migration --build -d
 	docker-compose up uploader --build -d
-	docker-compose up storage-1 --build
+	docker-compose up storage-1 --build -d
+	docker-compose up storage-2 --build -d

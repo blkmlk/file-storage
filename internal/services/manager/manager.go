@@ -5,8 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
+	"strconv"
 	"sync"
 	"time"
+
+	"github.com/blkmlk/file-storage/env"
 
 	"github.com/blkmlk/file-storage/internal/services/cache"
 	"github.com/blkmlk/file-storage/internal/services/repository"
@@ -37,12 +41,23 @@ func New(
 	repo repository.Repository,
 	cache cache.Cache,
 	clientFactory ClientFactory,
-) Manager {
+) (Manager, error) {
+	value, err := env.Get(env.MinStorages)
+	if err != nil {
+		return nil, err
+	}
+
+	minStorages, err := strconv.Atoi(value)
+	if err != nil {
+		return nil, fmt.Errorf("%s is not integer", env.MinStorages)
+	}
+
 	return &manager{
 		cache:         cache,
 		repo:          repo,
 		clientFactory: clientFactory,
-	}
+		minStorages:   minStorages,
+	}, nil
 }
 
 type manager struct {
@@ -70,7 +85,7 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 	}
 	defer m.cache.Unlock(keys)
 
-	if _, err := m.repo.GetFileByName(ctx, info.Name); err != nil {
+	if _, err := m.repo.GetFileByName(ctx, info.Name); err != nil && !errors.Is(err, repository.ErrNotFound) {
 		if errors.Is(err, repository.ErrAlreadyExists) {
 			return ErrExists
 		}
@@ -150,6 +165,7 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 
 			client, err := m.clientFactory.NewStorageClient(ctx, s.Host)
 			if err != nil {
+				log.Println(err.Error())
 				return
 			}
 			reqCtx, cancel := context.WithTimeout(ctx, MaxResponseTime)
@@ -158,9 +174,14 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 			resp, err := client.CheckReadiness(reqCtx, &protocol.CheckReadinessRequest{
 				Size: size,
 			})
-			if err != nil || !resp.Ready {
+			if err != nil {
+				log.Println(err.Error())
 				return
 			}
+			if !resp.Ready {
+				log.Println("not ready")
+			}
+
 			ldr.AddFilePart(&FilePart{
 				RemoteID:  resp.Id,
 				StorageID: s.ID,
@@ -175,7 +196,7 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 	}
 
 	if ldr.LenFileParts() < m.minStorages {
-		return nil, fmt.Errorf("not enough storages")
+		return nil, fmt.Errorf("not enough file parts")
 	}
 
 	return ldr, nil

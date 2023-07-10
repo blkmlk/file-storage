@@ -14,6 +14,7 @@ const (
 	StorageID      = "STORAGE_ID"
 	StorageHost    = "STORAGE_HOST"
 	RegistryHost   = "REGISTRY_HOST"
+	MinStorages    = "MIN_STORAGES"
 )
 
 func NewErrNotSet(env string) error {
