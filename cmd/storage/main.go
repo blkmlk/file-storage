@@ -18,7 +18,7 @@ import (
 func main() {
 	container := dig.New()
 
-	container.Provide(filestorage.NewFS)
+	container.Provide(filestorage.NewFSStorage)
 	container.Provide(storage.New)
 
 	var fStorage *storage.Storage

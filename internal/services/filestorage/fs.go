@@ -19,7 +19,7 @@ type fsFileStorage struct {
 	rootPath string
 }
 
-func NewFS() (FileStorage, error) {
+func NewFSStorage() (FileStorage, error) {
 	rootPath, err := env.Get(env.FSRootPath)
 	if err != nil {
 		return nil, err
@@ -33,7 +33,7 @@ func NewFS() (FileStorage, error) {
 func (f *fsFileStorage) Create(ctx context.Context, name string) (io.WriteCloser, error) {
 	filePath := f.getFilePath(name)
 
-	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0700)
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 	if err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return nil, ErrAlreadyExists
@@ -46,7 +46,7 @@ func (f *fsFileStorage) Create(ctx context.Context, name string) (io.WriteCloser
 func (f *fsFileStorage) Get(ctx context.Context, name string) (io.ReadCloser, error) {
 	filePath := f.getFilePath(name)
 
-	file, err := os.OpenFile(filePath, os.O_RDONLY, 0700)
+	file, err := os.OpenFile(filePath, os.O_RDONLY, 0644)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, ErrNotFound
