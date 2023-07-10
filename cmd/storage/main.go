@@ -29,7 +29,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	host, err := env.Get(env.HOST)
+	host, err := env.Get(env.ProtocolHost)
 	if err != nil {
 		log.Fatal(err)
 	}

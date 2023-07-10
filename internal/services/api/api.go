@@ -5,14 +5,13 @@ import (
 
 	controllers2 "github.com/blkmlk/file-storage/internal/services/api/controllers"
 
-	"github.com/blkmlk/file-storage/env"
 	"github.com/blkmlk/file-storage/protocol"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
 )
 
 type API interface {
-	Start() error
+	Start(restHost, protocolHost string) error
 	Stop() error
 }
 
@@ -23,8 +22,6 @@ const (
 )
 
 type api struct {
-	restHost           string
-	protocolHost       string
 	restController     *controllers2.RestController
 	protocolController *controllers2.ProtocolController
 	restServer         *gin.Engine
@@ -35,19 +32,8 @@ func New(
 	restController *controllers2.RestController,
 	protocolController *controllers2.ProtocolController,
 ) (API, error) {
-	restHost, err := env.Get(env.HOST)
-	if err != nil {
-		return nil, err
-	}
-
-	protocolHost, err := env.Get(env.ProtocolHost)
-	if err != nil {
-		return nil, err
-	}
 
 	a := api{
-		restHost:           restHost,
-		protocolHost:       protocolHost,
 		restController:     restController,
 		protocolController: protocolController,
 		restServer:         gin.Default(),
@@ -70,8 +56,8 @@ func (a *api) initGrpc() {
 	protocol.RegisterUploaderServer(a.grpcServer, a.protocolController)
 }
 
-func (a *api) Start() error {
-	listener, err := net.Listen("tcp", a.protocolHost)
+func (a *api) Start(restHost, protocolHost string) error {
+	listener, err := net.Listen("tcp", protocolHost)
 	if err != nil {
 		return err
 	}
@@ -83,7 +69,7 @@ func (a *api) Start() error {
 	}()
 
 	go func() {
-		errs <- a.restServer.Run(a.restHost)
+		errs <- a.restServer.Run(restHost)
 	}()
 
 	return <-errs

@@ -8,11 +8,10 @@ import (
 const (
 	DatabaseURL    = "DATABASE_URL"
 	UploadFileHost = "UPLOAD_FILE_HOST"
-	HOST           = "HOST"
+	RestHost       = "REST_HOST"
 	ProtocolHost   = "PROTOCOL_HOST"
 	FSRootPath     = "FS_ROOT_PATH"
 	RegistryHost   = "REGISTRY_HOST"
-	StorageHost    = "STORAGE_HOST"
 )
 
 func NewErrNotSet(env string) error {
