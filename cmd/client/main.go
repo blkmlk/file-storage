@@ -50,6 +50,8 @@ func main() {
 	if !bytes.Equal(fileData, data) {
 		log.Fatal("bytes are not equal")
 	}
+
+	fmt.Println("OK")
 }
 
 func createTempFile(dir string) (string, error) {

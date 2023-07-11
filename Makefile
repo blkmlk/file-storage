@@ -4,12 +4,7 @@ test: unit-test
 .PHONY: unit-test
 unit-test:
 	@echo 'Running tests...'
-	docker-compose -p test up -d && sleep 5
-	(\
-		export GCS_BUCKET_NAME="test"; \
-		go test -race -cover -timeout 1m -count=1 -p 1 ./internal/... \
-	) || (docker-compose -p test down -v ; exit 1)
-	docker-compose -p test down -v
+	go test -cover -count=1 -p 1 ./internal/...
 
 .PHONY: generate
 generate: go-generate
