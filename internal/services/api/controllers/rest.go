@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"log"
@@ -109,7 +108,6 @@ func (c *RestController) PostUploadFile(ctx *gin.Context) {
 }
 
 func (c *RestController) GetDownloadFile(ctx *gin.Context) {
-	var buffer bytes.Buffer
 	fileName := ctx.Param("name")
 
 	file, err := c.repo.GetFileByName(ctx, fileName)
@@ -123,11 +121,12 @@ func (c *RestController) GetDownloadFile(ctx *gin.Context) {
 		"Content-Disposition": fmt.Sprintf(`attachment; filename="%s"`, fileName),
 	}
 
-	ctx.DataFromReader(http.StatusOK, file.Size, file.ContentType, &buffer, extraHeaders)
-
-	if err = c.fileManager.Load(ctx, fileName, &buffer); err != nil {
+	reader, err := c.fileManager.Load(ctx, fileName)
+	if err != nil {
 		log.Println(err.Error())
 		ctx.Status(http.StatusInternalServerError)
 		return
 	}
+
+	ctx.DataFromReader(http.StatusOK, file.Size, file.ContentType, reader, extraHeaders)
 }

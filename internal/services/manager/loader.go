@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"sync"
 
 	"github.com/blkmlk/file-storage/protocol"
@@ -15,6 +16,7 @@ const (
 )
 
 type FilePart struct {
+	Seq       int
 	RemoteID  string
 	StorageID string
 	Client    protocol.StorageClient
@@ -60,32 +62,24 @@ func (l *loader) Upload(ctx context.Context, reader io.Reader) error {
 	return nil
 }
 
-func (l *loader) Download(ctx context.Context, writer io.Writer) error {
+func (l *loader) Download(ctx context.Context) (io.Reader, error) {
 	l.locker.Lock()
 	defer l.locker.Unlock()
 
 	fileParts := l.fileParts
 
-	targetSize := l.size
-	sent := int64(0)
-
+	readers := make([]io.Reader, 0, len(fileParts))
 	for _, fp := range fileParts {
-		n, err := l.getByChunks(ctx, &fp, writer, ChunkSize)
+		r, err := l.getByChunks(ctx, &fp, ChunkSize)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		sent += int64(n)
 
-		if sent > targetSize {
-			return fmt.Errorf("sent more than target size")
-		}
+		readers = append(readers, r)
 	}
+	reader := io.MultiReader(readers...)
 
-	if sent != targetSize {
-		return fmt.Errorf("sent less than target size")
-	}
-
-	return nil
+	return reader, nil
 }
 
 func (l *loader) AddFilePart(fp *FilePart) {
@@ -101,6 +95,14 @@ func (l *loader) GetFileParts() []FilePart {
 	copied := make([]FilePart, len(l.fileParts))
 	copy(copied, l.fileParts)
 	return copied
+}
+
+func (l *loader) SortFileParts() {
+	l.locker.Lock()
+	defer l.locker.Unlock()
+	sort.Slice(l.fileParts, func(i, j int) bool {
+		return l.fileParts[i].Seq < l.fileParts[j].Seq
+	})
 }
 
 func (l *loader) LenFileParts() int {
@@ -198,53 +200,35 @@ func (l *loader) sendByChunks(ctx context.Context, part *FilePart, reader io.Rea
 	return gErr
 }
 
-func (l *loader) getByChunks(ctx context.Context, part *FilePart, pipe io.Writer, chunkSize int64) (int, error) {
-	var wg sync.WaitGroup
-	ch := make(chan []byte, 1)
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for data := range ch {
-			if _, err := pipe.Write(data); err != nil {
-				// todo: handle the err
-				return
-			}
-		}
-	}()
+func (l *loader) getByChunks(ctx context.Context, part *FilePart, chunkSize int64) (io.Reader, error) {
+	r, w := io.Pipe()
 
 	resp, err := part.Client.GetFile(ctx, &protocol.GetFileRequest{Id: part.RemoteID, ChunkSize: chunkSize})
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer func() {
 		_ = resp.CloseSend()
 	}()
 
-	received := 0
-	for {
-		partData, err := resp.Recv()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
+	go func() {
+		defer w.Close()
+		for {
+			partData, err := resp.Recv()
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					return
+				}
+				//return nil, err
+				return
 			}
-			return 0, err
+
+			if _, err = w.Write(partData.Data); err != nil {
+				//return nil, err
+				return
+			}
 		}
+	}()
 
-		ch <- partData.Data
-		received += len(partData.Data)
-
-		if int64(received) > part.Size {
-			return 0, fmt.Errorf("received more than expected")
-		}
-	}
-
-	close(ch)
-	wg.Wait()
-
-	if int64(received) < part.Size {
-		return 0, fmt.Errorf("received less than expected")
-	}
-
-	return received, nil
+	return r, nil
 }

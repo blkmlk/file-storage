@@ -98,7 +98,7 @@ func (t *testSuite) TestCreateFileParts() {
 		t.Require().NoError(err)
 	}
 
-	foundFileParts, err := t.repository.FindOrderedFileParts(ctx, file.ID)
+	foundFileParts, err := t.repository.FindFileParts(ctx, file.ID)
 	t.Require().NoError(err)
 	t.Require().Len(foundFileParts, 10)
 }
@@ -123,4 +123,8 @@ func (t *testSuite) TestCreateStorage() {
 	t.Require().NoError(err)
 	t.Require().Len(foundStorages, 1)
 	t.Require().Equal("127.0.0.1:8080", foundStorages[0].Host)
+
+	foundStorage, err := t.repository.GetStorage(ctx, storage.ID)
+	t.Require().NoError(err)
+	t.Require().Equal(foundStorages[0], foundStorage)
 }

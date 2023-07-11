@@ -35,7 +35,7 @@ type FileInfo struct {
 type Manager interface {
 	Prepare(ctx context.Context) (string, error)
 	Store(ctx context.Context, id string, info FileInfo, reader io.Reader) error
-	Load(ctx context.Context, name string, writer io.Writer) error
+	Load(ctx context.Context, name string) (io.Reader, error)
 }
 
 func New(
@@ -133,21 +133,21 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 	return nil
 }
 
-func (m *manager) Load(ctx context.Context, name string, writer io.Writer) error {
+func (m *manager) Load(ctx context.Context, name string) (io.Reader, error) {
 	file, err := m.repo.GetFileByName(ctx, name)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			return ErrNotFound
+			return nil, ErrNotFound
 		}
-		return err
+		return nil, err
 	}
 
 	ldr, err := m.prepareLoaderForDownload(ctx, file)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return ldr.Download(ctx, writer)
+	return ldr.Download(ctx)
 }
 
 func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*loader, error) {
@@ -209,7 +209,7 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 }
 
 func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository.File) (*loader, error) {
-	fileParts, err := m.repo.FindOrderedFileParts(ctx, file.ID)
+	fileParts, err := m.repo.FindFileParts(ctx, file.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -224,11 +224,13 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 
 			storage, err := m.repo.GetStorage(ctx, fp.StorageID)
 			if err != nil {
+				log.Println(err.Error())
 				return
 			}
 
 			client, err := m.clientFactory.NewStorageClient(ctx, storage.Host)
 			if err != nil {
+				log.Println(err.Error())
 				return
 			}
 			reqCtx, cancel := context.WithTimeout(ctx, MaxResponseTime)
@@ -238,10 +240,12 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 				Id: fp.RemoteID,
 			})
 			if err != nil {
+				log.Println(err.Error())
 				return
 			}
 
 			if !resp.Exists {
+				log.Println("not exist")
 				return
 			}
 
@@ -263,6 +267,8 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 	if ldr.LenFileParts() != len(fileParts) {
 		return nil, fmt.Errorf("not enough parts")
 	}
+
+	ldr.SortFileParts()
 
 	return ldr, nil
 }

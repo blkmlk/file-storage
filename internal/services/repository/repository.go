@@ -40,7 +40,7 @@ type Repository interface {
 
 	CreateFilePart(ctx context.Context, filePart *FilePart) error
 	CreateFileParts(ctx context.Context, fileParts []FilePart) error
-	FindOrderedFileParts(ctx context.Context, fileID string) ([]*FilePart, error)
+	FindFileParts(ctx context.Context, fileID string) ([]*FilePart, error)
 }
 
 type storage struct {
@@ -128,8 +128,15 @@ func (s storage) CreateOrUpdateStorage(ctx context.Context, fileStorage *Storage
 }
 
 func (s storage) GetStorage(ctx context.Context, id string) (*Storage, error) {
-	//TODO implement me
-	panic("implement me")
+	var result Storage
+	tx := s.db.WithContext(ctx).Table("storages").Where("id = ?", id).Find(&result)
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		return nil, ErrNotFound
+	}
+	return &result, nil
 }
 
 func (s storage) FindStorages(ctx context.Context) ([]*Storage, error) {
@@ -159,10 +166,10 @@ func (s storage) CreateFileParts(ctx context.Context, fileParts []FilePart) erro
 	return nil
 }
 
-func (s storage) FindOrderedFileParts(ctx context.Context, fileID string) ([]*FilePart, error) {
+func (s storage) FindFileParts(ctx context.Context, fileID string) ([]*FilePart, error) {
 	var fileParts []*FilePart
 	tx := s.db.WithContext(ctx).Table("file_parts").
-		Where("file_id = ?", fileID).Order("seq ASC").Find(&fileParts)
+		Where("file_id = ?", fileID).Find(&fileParts)
 	if tx.Error != nil {
 		return nil, tx.Error
 	}
