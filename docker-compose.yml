@@ -37,10 +37,6 @@ services:
       - REGISTRY_HOST=uploader:5000
       - PROTOCOL_HOST=:5000
       - FS_ROOT_PATH=/tmp
-    volumes:
-      - type: bind
-        source: /tmp
-        target: /tmp
   storage-2:
     build:
       context: .
@@ -51,7 +47,33 @@ services:
       - REGISTRY_HOST=uploader:5000
       - PROTOCOL_HOST=:5000
       - FS_ROOT_PATH=/tmp
-    volumes:
-      - type: bind
-        source: /tmp
-        target: /tmp
+  storage-3:
+    build:
+      context: .
+      dockerfile: docker/storage/Dockerfile
+    environment:
+      - STORAGE_ID=2244cc9d-a207-41c3-b044-52b823f16939
+      - STORAGE_HOST=storage-3:5000
+      - REGISTRY_HOST=uploader:5000
+      - PROTOCOL_HOST=:5000
+      - FS_ROOT_PATH=/tmp
+  storage-4:
+    build:
+      context: .
+      dockerfile: docker/storage/Dockerfile
+    environment:
+      - STORAGE_ID=df3d4dde-e07e-4b4f-abdb-aac6427dc014
+      - STORAGE_HOST=storage-4:5000
+      - REGISTRY_HOST=uploader:5000
+      - PROTOCOL_HOST=:5000
+      - FS_ROOT_PATH=/tmp
+  storage-5:
+    build:
+      context: .
+      dockerfile: docker/storage/Dockerfile
+    environment:
+      - STORAGE_ID=6fc9d987-b260-4edb-a4ea-c52642b091a9
+      - STORAGE_HOST=storage-5:5000
+      - REGISTRY_HOST=uploader:5000
+      - PROTOCOL_HOST=:5000
+      - FS_ROOT_PATH=/tmp

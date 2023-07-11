@@ -250,6 +250,7 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 			}
 
 			ldr.AddFilePart(&FilePart{
+				Seq:       fp.Seq,
 				StorageID: storage.ID,
 				Client:    client,
 				RemoteID:  fp.RemoteID,

@@ -111,6 +111,7 @@ func (s *Storage) UploadFile(server protocol.Storage_UploadFileServer) error {
 			if errors.Is(err, io.EOF) {
 				break
 			}
+			return err
 		}
 
 		if writer == nil {

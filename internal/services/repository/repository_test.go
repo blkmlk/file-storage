@@ -101,6 +101,12 @@ func (t *testSuite) TestCreateFileParts() {
 	foundFileParts, err := t.repository.FindFileParts(ctx, file.ID)
 	t.Require().NoError(err)
 	t.Require().Len(foundFileParts, 10)
+
+	uniqueIDs := make(map[string]bool)
+	for _, fp := range foundFileParts {
+		uniqueIDs[fp.ID] = true
+	}
+	t.Require().Len(uniqueIDs, len(foundFileParts))
 }
 
 func (t *testSuite) TestCreateStorage() {

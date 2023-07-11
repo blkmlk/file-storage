@@ -70,7 +70,7 @@ func (l *loader) Download(ctx context.Context) (io.Reader, error) {
 
 	readers := make([]io.Reader, 0, len(fileParts))
 	for _, fp := range fileParts {
-		r, err := l.getByChunks(ctx, &fp, ChunkSize)
+		r, err := l.getByChunks(ctx, fp, ChunkSize)
 		if err != nil {
 			return nil, err
 		}
@@ -115,46 +115,13 @@ func (l *loader) sendByChunks(ctx context.Context, part *FilePart, reader io.Rea
 	inCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	var wg sync.WaitGroup
+	stream, err := part.Client.UploadFile(inCtx)
+	if err != nil {
+		return err
+	}
 
-	dataCh := make(chan []byte, 1)
-	errCh := make(chan error, 2)
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		stream, err := part.Client.UploadFile(inCtx)
-		if err != nil {
-			errCh <- err
-			return
-		}
-
-		defer func() {
-			resp, err := stream.CloseAndRecv()
-			if err != nil {
-				errCh <- err
-				return
-			}
-			part.Hash = resp.Hash
-			part.Size = fullSize
-		}()
-
-		for data := range dataCh {
-			err = stream.Send(&protocol.UploadFileRequest{
-				Id:   part.RemoteID,
-				Data: data,
-			})
-			if err != nil {
-				errCh <- err
-				return
-			}
-		}
-	}()
-
-	var gErr error
 	remainingSize := fullSize
 	buff := make([]byte, chunkSize)
-
 	for remainingSize > 0 {
 		chunk := chunkSize
 		if remainingSize < chunk {
@@ -164,43 +131,35 @@ func (l *loader) sendByChunks(ctx context.Context, part *FilePart, reader io.Rea
 		data := buff[:chunk]
 		n, err := reader.Read(data)
 		if err != nil {
-			gErr = err
-			break
+			return err
 		}
 
 		if int64(n) < chunk {
-			gErr = fmt.Errorf("read less than expected")
-			break
+			return fmt.Errorf("read less than expected")
 		}
 
-		select {
-		case <-ctx.Done():
-			gErr = ctx.Err()
-			break
-		case gErr = <-errCh:
-			break
-		case dataCh <- data[:n]:
+		err = stream.Send(&protocol.UploadFileRequest{
+			Id:   part.RemoteID,
+			Data: data,
+		})
+		if err != nil {
+			return err
 		}
 
 		remainingSize -= chunk
 	}
 
-	if gErr != nil {
-		cancel()
+	resp, err := stream.CloseAndRecv()
+	if err != nil {
+		return err
 	}
+	part.Hash = resp.Hash
+	part.Size = fullSize
 
-	close(dataCh)
-	wg.Wait()
-	close(errCh)
-
-	if len(errCh) > 0 {
-		gErr = <-errCh
-	}
-
-	return gErr
+	return nil
 }
 
-func (l *loader) getByChunks(ctx context.Context, part *FilePart, chunkSize int64) (io.Reader, error) {
+func (l *loader) getByChunks(ctx context.Context, part FilePart, chunkSize int64) (io.Reader, error) {
 	r, w := io.Pipe()
 
 	resp, err := part.Client.GetFile(ctx, &protocol.GetFileRequest{Id: part.RemoteID, ChunkSize: chunkSize})
@@ -217,15 +176,13 @@ func (l *loader) getByChunks(ctx context.Context, part *FilePart, chunkSize int6
 			partData, err := resp.Recv()
 			if err != nil {
 				if errors.Is(err, io.EOF) {
-					return
+					break
 				}
-				//return nil, err
-				return
+				break
 			}
 
 			if _, err = w.Write(partData.Data); err != nil {
-				//return nil, err
-				return
+				break
 			}
 		}
 	}()

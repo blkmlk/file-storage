@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/blkmlk/file-storage/internal/services/api/controllers"
@@ -18,17 +20,55 @@ import (
 func main() {
 	ctx := context.Background()
 
-	err := uploadFile(ctx, "127.0.0.1:19090", "/tmp/test.mp4")
+	tmpdir, err := os.MkdirTemp("/tmp", "file-storage")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	data, err := downloadFile(ctx, "127.0.0.1:19090", "test.mp4")
+	defer os.RemoveAll(tmpdir)
+
+	filePath, err := createTempFile(tmpdir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fileName := filepath.Base(filePath)
+
+	if err := uploadFile(ctx, "127.0.0.1:19090", filePath); err != nil {
+		log.Fatal(err)
+	}
+
+	data, err := downloadFile(ctx, "127.0.0.1:19090", fileName)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println(len(data))
+	fileData, err := os.ReadFile(filePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if !bytes.Equal(fileData, data) {
+		log.Fatal("bytes are not equal")
+	}
+}
+
+func createTempFile(dir string) (string, error) {
+	content := make([]byte, 1024*1024*10)
+	_, err := rand.Read(content)
+	if err != nil {
+		return "", err
+	}
+
+	file, err := os.CreateTemp(dir, "upload")
+	if err != nil {
+		return "", err
+	}
+	if _, err = file.Write(content); err != nil {
+		return "", err
+	}
+	_ = file.Close()
+
+	return file.Name(), nil
 }
 
 func uploadFile(ctx context.Context, host, filePath string) error {
@@ -115,6 +155,10 @@ func downloadFile(ctx context.Context, host, name string) ([]byte, error) {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
 	return io.ReadAll(resp.Body)

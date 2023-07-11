@@ -24,5 +24,14 @@ start:
 	docker-compose up postgres --build -d
 	docker-compose up migration --build -d
 	docker-compose up uploader --build -d
-	docker-compose up storage-1 --build -d
-	docker-compose up storage-2 --build -d
+	docker-compose up storage-1 storage-2 storage-3 storage-4 storage-5 --build -d
+
+.PHONY: client-test
+client-test:
+	@echo 'Running client test'
+	go run cmd/client/main.go
+
+.PHONY: stop
+stop:
+	@echo 'Running local...'
+	docker-compose down
