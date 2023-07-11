@@ -22,6 +22,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	data, err := downloadFile(ctx, "127.0.0.1:19090", "test.mp4")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(len(data))
 }
 
 func uploadFile(ctx context.Context, host, filePath string) error {
@@ -95,4 +102,20 @@ func sendFile(ctx context.Context, fileName, uploadLink string) error {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func downloadFile(ctx context.Context, host, name string) ([]byte, error) {
+	reqUrl := fmt.Sprintf("http://%s/api/v1/download/%s", host, name)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqUrl, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return io.ReadAll(resp.Body)
 }

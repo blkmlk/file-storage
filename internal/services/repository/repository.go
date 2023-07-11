@@ -21,9 +21,16 @@ var (
 	ErrNotFound      = errors.New("not found")
 )
 
+type UpdateFileInfoInput struct {
+	Name        string
+	ContentType string
+	Size        int64
+	Status      FileStatus
+}
+
 type Repository interface {
 	CreateFile(ctx context.Context, file *File) error
-	UpdateFileStatus(ctx context.Context, id, name string, size int64, status FileStatus) error
+	UpdateFileInfo(ctx context.Context, id string, input UpdateFileInfoInput) error
 	GetFile(ctx context.Context, id string) (*File, error)
 	GetFileByName(ctx context.Context, name string) (*File, error)
 
@@ -57,12 +64,14 @@ func (s storage) CreateFile(ctx context.Context, file *File) error {
 	return nil
 }
 
-func (s storage) UpdateFileStatus(ctx context.Context, id, name string, size int64, status FileStatus) error {
+func (s storage) UpdateFileInfo(ctx context.Context, id string, input UpdateFileInfoInput) error {
 	tx := s.db.WithContext(ctx).Table("files").Where("id = ?", id).
 		Updates(map[string]any{
-			"name":   name,
-			"size":   size,
-			"status": status,
+			"name":         input.Name,
+			"content_type": input.ContentType,
+			"size":         input.Size,
+			"status":       input.Status,
+			"updated_at":   time.Now(),
 		})
 
 	if tx.Error != nil {

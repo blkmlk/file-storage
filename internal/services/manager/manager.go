@@ -27,8 +27,9 @@ var (
 )
 
 type FileInfo struct {
-	Name string
-	Size int64
+	Name        string
+	ContentType string
+	Size        int64
 }
 
 type Manager interface {
@@ -120,7 +121,12 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 		return err
 	}
 
-	if err = m.repo.UpdateFileStatus(ctx, file.ID, info.Name, info.Size, repository.FileStatusUploaded); err != nil {
+	if err = m.repo.UpdateFileInfo(ctx, file.ID, repository.UpdateFileInfoInput{
+		Name:        info.Name,
+		ContentType: info.ContentType,
+		Size:        info.Size,
+		Status:      repository.FileStatusUploaded,
+	}); err != nil {
 		return err
 	}
 

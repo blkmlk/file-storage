@@ -90,8 +90,9 @@ func (c *RestController) PostUploadFile(ctx *gin.Context) {
 	}
 
 	fileInfo := manager.FileInfo{
-		Name: file.Filename,
-		Size: file.Size,
+		Name:        file.Filename,
+		ContentType: file.Header.Get("Content-Type"),
+		Size:        file.Size,
 	}
 
 	err = c.fileManager.Store(ctx, id, fileInfo, pipe)
@@ -118,7 +119,11 @@ func (c *RestController) GetDownloadFile(ctx *gin.Context) {
 		return
 	}
 
-	ctx.DataFromReader(http.StatusOK, file.Size, "application/zip", &buffer, nil)
+	extraHeaders := map[string]string{
+		"Content-Disposition": fmt.Sprintf(`attachment; filename="%s"`, fileName),
+	}
+
+	ctx.DataFromReader(http.StatusOK, file.Size, file.ContentType, &buffer, extraHeaders)
 
 	if err = c.fileManager.Load(ctx, fileName, &buffer); err != nil {
 		log.Println(err.Error())

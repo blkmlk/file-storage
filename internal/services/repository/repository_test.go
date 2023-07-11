@@ -54,10 +54,20 @@ func (t *testSuite) TestCreateUpdateAndGetFile() {
 	err = t.repository.CreateFile(ctx, &file)
 	t.Require().ErrorIs(err, repository2.ErrAlreadyExists)
 
-	err = t.repository.UpdateFileStatus(ctx, file.ID, "name-1", 100, repository2.FileStatusUploaded)
+	err = t.repository.UpdateFileInfo(ctx, file.ID, repository2.UpdateFileInfoInput{
+		Name:        "name-1",
+		ContentType: "application/zip",
+		Size:        100,
+		Status:      repository2.FileStatusUploaded,
+	})
 	t.Require().NoError(err)
 
-	err = t.repository.UpdateFileStatus(ctx, uuid.NewString(), "name-2", 100, repository2.FileStatusUploaded)
+	err = t.repository.UpdateFileInfo(ctx, uuid.NewString(), repository2.UpdateFileInfoInput{
+		Name:        "name-2",
+		ContentType: "application/zip",
+		Size:        100,
+		Status:      repository2.FileStatusUploaded,
+	})
 	t.Require().ErrorIs(err, repository2.ErrNotFound)
 
 	foundFile, err := t.repository.GetFile(ctx, file.ID)
