@@ -21,9 +21,16 @@ var (
 	ErrNotFound      = errors.New("not found")
 )
 
+type UpdateFileInfoInput struct {
+	Name        string
+	ContentType string
+	Size        int64
+	Status      FileStatus
+}
+
 type Repository interface {
 	CreateFile(ctx context.Context, file *File) error
-	UpdateFileStatus(ctx context.Context, id, name string, size int64, status FileStatus) error
+	UpdateFileInfo(ctx context.Context, id string, input UpdateFileInfoInput) error
 	GetFile(ctx context.Context, id string) (*File, error)
 	GetFileByName(ctx context.Context, name string) (*File, error)
 
@@ -33,7 +40,7 @@ type Repository interface {
 
 	CreateFilePart(ctx context.Context, filePart *FilePart) error
 	CreateFileParts(ctx context.Context, fileParts []FilePart) error
-	FindOrderedFileParts(ctx context.Context, fileID string) ([]*FilePart, error)
+	FindFileParts(ctx context.Context, fileID string) ([]*FilePart, error)
 }
 
 type storage struct {
@@ -57,12 +64,14 @@ func (s storage) CreateFile(ctx context.Context, file *File) error {
 	return nil
 }
 
-func (s storage) UpdateFileStatus(ctx context.Context, id, name string, size int64, status FileStatus) error {
+func (s storage) UpdateFileInfo(ctx context.Context, id string, input UpdateFileInfoInput) error {
 	tx := s.db.WithContext(ctx).Table("files").Where("id = ?", id).
 		Updates(map[string]any{
-			"name":   name,
-			"size":   size,
-			"status": status,
+			"name":         input.Name,
+			"content_type": input.ContentType,
+			"size":         input.Size,
+			"status":       input.Status,
+			"updated_at":   time.Now(),
 		})
 
 	if tx.Error != nil {
@@ -119,8 +128,15 @@ func (s storage) CreateOrUpdateStorage(ctx context.Context, fileStorage *Storage
 }
 
 func (s storage) GetStorage(ctx context.Context, id string) (*Storage, error) {
-	//TODO implement me
-	panic("implement me")
+	var result Storage
+	tx := s.db.WithContext(ctx).Table("storages").Where("id = ?", id).Find(&result)
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		return nil, ErrNotFound
+	}
+	return &result, nil
 }
 
 func (s storage) FindStorages(ctx context.Context) ([]*Storage, error) {
@@ -150,10 +166,10 @@ func (s storage) CreateFileParts(ctx context.Context, fileParts []FilePart) erro
 	return nil
 }
 
-func (s storage) FindOrderedFileParts(ctx context.Context, fileID string) ([]*FilePart, error) {
+func (s storage) FindFileParts(ctx context.Context, fileID string) ([]*FilePart, error) {
 	var fileParts []*FilePart
 	tx := s.db.WithContext(ctx).Table("file_parts").
-		Where("file_id = ?", fileID).Order("seq ASC").Find(&fileParts)
+		Where("file_id = ?", fileID).Find(&fileParts)
 	if tx.Error != nil {
 		return nil, tx.Error
 	}

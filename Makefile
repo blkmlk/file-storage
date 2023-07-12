@@ -1,23 +1,10 @@
-.PHONY: start
-start:
-	go run main.go start
-
-.PHONY: migrate
-migrate:
-	go run main.go migrate
-
 .PHONY: test
 test: unit-test
 
 .PHONY: unit-test
 unit-test:
 	@echo 'Running tests...'
-	docker-compose -p test up -d && sleep 5
-	(\
-		export GCS_BUCKET_NAME="test"; \
-		go test -race -cover -timeout 1m -count=1 -p 1 ./internal/... \
-	) || (docker-compose -p test down -v ; exit 1)
-	docker-compose -p test down -v
+	go test -cover -count=1 -p 1 ./internal/...
 
 .PHONY: generate
 generate: go-generate
@@ -26,15 +13,20 @@ generate: go-generate
 go-generate:
 	go generate ./...
 
-.PHONY: local-run
-local-run:
+.PHONY: start
+start:
 	@echo 'Running local...'
-	docker-compose -p test up -d postgres && sleep 5
-	(\
-		export DATABASE_URL="postgres://root:root@127.0.0.1:25432/file-storage-test?sslmode=disable"; \
-		export REST_HOST="127.0.0.1:8080"; \
-		export PROTOCOL_HOST="127.0.0.1:9000"; \
-		go run cmd/migration/main.go migrate; \
-		go run cmd/uploader/main.go start; \
-	) || (docker-compose -p test down -v ; exit 1)
-	docker-compose -p test down -v
+	docker-compose up postgres --build -d
+	docker-compose up migration --build -d
+	docker-compose up uploader --build -d
+	docker-compose up storage-1 storage-2 storage-3 storage-4 storage-5 --build -d
+
+.PHONY: client-test
+client-test:
+	@echo 'Running client test'
+	go run cmd/client/main.go
+
+.PHONY: stop
+stop:
+	@echo 'Running local...'
+	docker-compose down

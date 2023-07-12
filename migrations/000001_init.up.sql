@@ -6,6 +6,7 @@ CREATE TYPE file_status AS ENUM('created', 'uploaded');
 CREATE TABLE files (
     id uuid PRIMARY KEY NOT NULL DEFAULT uuid_generate_v4(),
     name VARCHAR(200) NULL UNIQUE,
+    content_type varchar(255) NOT NULL DEFAULT '',
     hash varchar(200) NOT NULL DEFAULT '',
     size int NOT NULL DEFAULT 0,
     status file_status NOT NULL DEFAULT 'created'::file_status,

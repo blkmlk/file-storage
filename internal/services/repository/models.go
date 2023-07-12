@@ -14,13 +14,14 @@ const (
 )
 
 type File struct {
-	ID        string
-	Name      *string
-	Hash      string
-	Size      int64
-	Status    FileStatus
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID          string
+	Name        *string
+	ContentType string
+	Hash        string
+	Size        int64
+	Status      FileStatus
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 func NewFile() File {

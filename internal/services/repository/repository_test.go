@@ -54,10 +54,20 @@ func (t *testSuite) TestCreateUpdateAndGetFile() {
 	err = t.repository.CreateFile(ctx, &file)
 	t.Require().ErrorIs(err, repository2.ErrAlreadyExists)
 
-	err = t.repository.UpdateFileStatus(ctx, file.ID, "name-1", 100, repository2.FileStatusUploaded)
+	err = t.repository.UpdateFileInfo(ctx, file.ID, repository2.UpdateFileInfoInput{
+		Name:        "name-1",
+		ContentType: "application/zip",
+		Size:        100,
+		Status:      repository2.FileStatusUploaded,
+	})
 	t.Require().NoError(err)
 
-	err = t.repository.UpdateFileStatus(ctx, uuid.NewString(), "name-2", 100, repository2.FileStatusUploaded)
+	err = t.repository.UpdateFileInfo(ctx, uuid.NewString(), repository2.UpdateFileInfoInput{
+		Name:        "name-2",
+		ContentType: "application/zip",
+		Size:        100,
+		Status:      repository2.FileStatusUploaded,
+	})
 	t.Require().ErrorIs(err, repository2.ErrNotFound)
 
 	foundFile, err := t.repository.GetFile(ctx, file.ID)
@@ -88,9 +98,15 @@ func (t *testSuite) TestCreateFileParts() {
 		t.Require().NoError(err)
 	}
 
-	foundFileParts, err := t.repository.FindOrderedFileParts(ctx, file.ID)
+	foundFileParts, err := t.repository.FindFileParts(ctx, file.ID)
 	t.Require().NoError(err)
 	t.Require().Len(foundFileParts, 10)
+
+	uniqueIDs := make(map[string]bool)
+	for _, fp := range foundFileParts {
+		uniqueIDs[fp.ID] = true
+	}
+	t.Require().Len(uniqueIDs, len(foundFileParts))
 }
 
 func (t *testSuite) TestCreateStorage() {
@@ -113,4 +129,8 @@ func (t *testSuite) TestCreateStorage() {
 	t.Require().NoError(err)
 	t.Require().Len(foundStorages, 1)
 	t.Require().Equal("127.0.0.1:8080", foundStorages[0].Host)
+
+	foundStorage, err := t.repository.GetStorage(ctx, storage.ID)
+	t.Require().NoError(err)
+	t.Require().Equal(foundStorages[0], foundStorage)
 }

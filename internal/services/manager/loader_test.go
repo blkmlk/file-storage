@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"io"
 	"testing"
 
 	"github.com/blkmlk/file-storage/protocol"
@@ -23,16 +24,19 @@ func TestLoader_Upload(t *testing.T) {
 
 	fileParts := []*FilePart{
 		{
+			Seq:       1,
 			StorageID: uuid.NewString(),
 			Client:    mocks.NewStorage(ctx),
 			Size:      597,
 		},
 		{
+			Seq:       0,
 			StorageID: uuid.NewString(),
 			Client:    mocks.NewStorage(ctx),
 			Size:      597,
 		},
 		{
+			Seq:       2,
 			StorageID: uuid.NewString(),
 			Client:    mocks.NewStorage(ctx),
 			Size:      598,
@@ -49,6 +53,8 @@ func TestLoader_Upload(t *testing.T) {
 		ldr.AddFilePart(fp)
 	}
 
+	ldr.SortFileParts()
+
 	buff := make([]byte, fullSize)
 	_, err := rand.Read(buff)
 	require.NoError(t, err)
@@ -57,7 +63,9 @@ func TestLoader_Upload(t *testing.T) {
 	require.NoError(t, err)
 
 	offset := 0
-	for _, fp := range ldr.GetFileParts() {
+	for seq, fp := range ldr.GetFileParts() {
+		require.Equal(t, seq, fp.Seq)
+
 		s := fp.Client.(*mocks.Storage)
 		parts := s.GetFileParts()
 		require.Len(t, parts, 1)
@@ -69,8 +77,10 @@ func TestLoader_Upload(t *testing.T) {
 		offset += int(fp.Size)
 	}
 
-	var recovered bytes.Buffer
-	err = ldr.Download(ctx, &recovered)
+	reader, err := ldr.Download(ctx)
 	require.NoError(t, err)
-	require.Equal(t, buff, recovered.Bytes())
+
+	recovered, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	require.Equal(t, buff, recovered)
 }

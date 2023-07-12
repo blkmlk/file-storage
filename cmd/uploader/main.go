@@ -1,7 +1,9 @@
 package main
 
 import (
-	"log"
+	"go.uber.org/zap"
+
+	"github.com/blkmlk/file-storage/internal/services/repository"
 
 	"github.com/blkmlk/file-storage/internal/services/cache"
 
@@ -17,16 +19,20 @@ func main() {
 	container := dig.New()
 
 	container.Provide(deps.NewDB)
+	container.Provide(repository.New)
 	container.Provide(controllers2.NewUploadController)
 	container.Provide(controllers2.NewProtocolController)
 	container.Provide(api.New)
 	container.Provide(manager.New)
 	container.Provide(manager.NewGRPCClientFactory)
 	container.Provide(cache.NewMapCache)
+	container.Provide(deps.NewZapLogger)
 
 	var listener api.API
-	err := container.Invoke(func(a api.API) {
+	var log *zap.SugaredLogger
+	err := container.Invoke(func(a api.API, l *zap.SugaredLogger) {
 		listener = a
+		log = l
 	})
 	if err != nil {
 		log.Fatal(err)
