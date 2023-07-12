@@ -8,6 +8,8 @@ import (
 	"sort"
 	"sync"
 
+	"go.uber.org/zap"
+
 	"github.com/blkmlk/file-storage/protocol"
 )
 
@@ -25,13 +27,14 @@ type FilePart struct {
 }
 
 type loader struct {
+	log       *zap.SugaredLogger
 	size      int64
 	locker    sync.Mutex
 	fileParts []FilePart
 }
 
-func NewLoader(size int64) *loader {
-	return &loader{size: size}
+func NewLoader(log *zap.SugaredLogger, size int64) *loader {
+	return &loader{log: log, size: size}
 }
 
 func (l *loader) Upload(ctx context.Context, reader io.Reader) error {
@@ -131,6 +134,9 @@ func (l *loader) sendByChunks(ctx context.Context, part *FilePart, reader io.Rea
 		data := buff[:chunk]
 		n, err := reader.Read(data)
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
 			return err
 		}
 
@@ -178,11 +184,12 @@ func (l *loader) getByChunks(ctx context.Context, part FilePart, chunkSize int64
 				if errors.Is(err, io.EOF) {
 					break
 				}
+				l.log.Errorf("failed to receive msg from storage: %v", err)
 				break
 			}
 
-			if _, err = w.Write(partData.Data); err != nil {
-				break
+			if _, err = w.Write(partData.Data); err != nil && !errors.Is(err, io.EOF) {
+				l.log.Errorf("failed to write data to pipe: %v", err)
 			}
 		}
 	}()

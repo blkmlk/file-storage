@@ -5,12 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"strconv"
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
+	"github.com/hashicorp/go-multierror"
+
 	"github.com/blkmlk/file-storage/env"
+	_ "github.com/hashicorp/go-multierror"
 
 	"github.com/blkmlk/file-storage/internal/services/cache"
 	"github.com/blkmlk/file-storage/internal/services/repository"
@@ -22,6 +26,7 @@ const (
 )
 
 var (
+	ErrBusy     = errors.New("file is busy")
 	ErrExists   = errors.New("file exists")
 	ErrNotFound = errors.New("not found")
 )
@@ -62,6 +67,7 @@ func New(
 }
 
 type manager struct {
+	log           *zap.SugaredLogger
 	repo          repository.Repository
 	cache         cache.Cache
 	clientFactory ClientFactory
@@ -82,7 +88,7 @@ func (m *manager) Prepare(ctx context.Context) (string, error) {
 func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reader io.Reader) error {
 	keys := []string{fileID, info.Name}
 	if err := m.cache.Lock(keys); err != nil {
-		return fmt.Errorf("file is already being stored")
+		return ErrBusy
 	}
 	defer m.cache.Unlock(keys)
 
@@ -99,7 +105,7 @@ func (m *manager) Store(ctx context.Context, fileID string, info FileInfo, reade
 	}
 
 	if file.Status != repository.FileStatusCreated {
-		return fmt.Errorf("wrong status")
+		return ErrExists
 	}
 
 	ldr, err := m.prepareLoaderForUpload(ctx, info)
@@ -160,10 +166,11 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 		return nil, fmt.Errorf("not enough storages")
 	}
 
-	ldr := NewLoader(info.Size)
+	ldr := NewLoader(m.log, info.Size)
 
 	var wg sync.WaitGroup
 	maxPartSize := info.Size / int64(m.minStorages)
+	errs := make(chan error, len(storages))
 	for _, s := range storages {
 		wg.Add(1)
 		go func(ctx context.Context, s repository.Storage, size int64) {
@@ -171,7 +178,7 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 
 			client, err := m.clientFactory.NewStorageClient(ctx, s.Host)
 			if err != nil {
-				log.Println(err.Error())
+				errs <- fmt.Errorf("failed to connect to storage (%s): %v", s.ID, err)
 				return
 			}
 			reqCtx, cancel := context.WithTimeout(ctx, MaxResponseTime)
@@ -181,11 +188,11 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 				Size: size,
 			})
 			if err != nil {
-				log.Println(err.Error())
+				errs <- fmt.Errorf("failed to check storage rediness (%s): %v", s.ID, err)
 				return
 			}
 			if !resp.Ready {
-				log.Println("not ready")
+				return
 			}
 
 			ldr.AddFilePart(&FilePart{
@@ -197,8 +204,13 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 	}
 	wg.Wait()
 
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
+	close(errs)
+	if len(errs) > 0 {
+		var err error
+		for e := range errs {
+			err = multierror.Append(err, e)
+		}
+		return nil, err
 	}
 
 	if ldr.LenFileParts() < m.minStorages {
@@ -214,9 +226,10 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 		return nil, err
 	}
 
-	ldr := NewLoader(file.Size)
+	ldr := NewLoader(m.log, file.Size)
 
 	var wg sync.WaitGroup
+	errs := make(chan error, len(fileParts))
 	for i := 0; i < len(fileParts); i++ {
 		wg.Add(1)
 		go func(ctx context.Context, fp repository.FilePart) {
@@ -224,13 +237,13 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 
 			storage, err := m.repo.GetStorage(ctx, fp.StorageID)
 			if err != nil {
-				log.Println(err.Error())
+				errs <- fmt.Errorf("failed to get storage from DB: %v", err)
 				return
 			}
 
 			client, err := m.clientFactory.NewStorageClient(ctx, storage.Host)
 			if err != nil {
-				log.Println(err.Error())
+				errs <- fmt.Errorf("failed to connect to storage (%s): %v", storage.ID, err)
 				return
 			}
 			reqCtx, cancel := context.WithTimeout(ctx, MaxResponseTime)
@@ -240,12 +253,12 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 				Id: fp.RemoteID,
 			})
 			if err != nil {
-				log.Println(err.Error())
+				errs <- fmt.Errorf("failed to check file part (%s): %v", storage.ID, err)
 				return
 			}
 
 			if !resp.Exists {
-				log.Println("not exist")
+				errs <- fmt.Errorf("file part doens't exist: %s", fp.ID)
 				return
 			}
 
@@ -261,8 +274,13 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 	}
 	wg.Wait()
 
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
+	close(errs)
+	if len(errs) > 0 {
+		var err error
+		for e := range errs {
+			err = multierror.Append(err, e)
+		}
+		return nil, err
 	}
 
 	if ldr.LenFileParts() != len(fileParts) {

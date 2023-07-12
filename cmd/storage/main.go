@@ -4,6 +4,8 @@ import (
 	"log"
 	"net"
 
+	"github.com/blkmlk/file-storage/deps"
+
 	"github.com/blkmlk/file-storage/env"
 
 	"github.com/blkmlk/file-storage/protocol"
@@ -20,6 +22,7 @@ func main() {
 
 	container.Provide(filestorage.NewFSStorage)
 	container.Provide(storage.New)
+	container.Provide(deps.NewZapLogger)
 
 	var fStorage *storage.Storage
 	err := container.Invoke(func(s *storage.Storage) {
