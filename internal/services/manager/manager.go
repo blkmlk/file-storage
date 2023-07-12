@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/zap"
+	"github.com/blkmlk/file-storage/internal/helpers"
 
-	"github.com/hashicorp/go-multierror"
+	"go.uber.org/zap"
 
 	"github.com/blkmlk/file-storage/env"
 	_ "github.com/hashicorp/go-multierror"
@@ -205,11 +205,7 @@ func (m *manager) prepareLoaderForUpload(ctx context.Context, info FileInfo) (*l
 	wg.Wait()
 
 	close(errs)
-	if len(errs) > 0 {
-		var err error
-		for e := range errs {
-			err = multierror.Append(err, e)
-		}
+	if err = helpers.ReadErrors(errs); err != nil {
 		return nil, err
 	}
 
@@ -275,11 +271,7 @@ func (m *manager) prepareLoaderForDownload(ctx context.Context, file *repository
 	wg.Wait()
 
 	close(errs)
-	if len(errs) > 0 {
-		var err error
-		for e := range errs {
-			err = multierror.Append(err, e)
-		}
+	if err = helpers.ReadErrors(errs); err != nil {
 		return nil, err
 	}
 
