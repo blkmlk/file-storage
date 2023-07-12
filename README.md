@@ -14,6 +14,6 @@ A solution for the task to create an S3 like storage
 ### How to run tests?
 ```shell
 make start
-make test
+make client-test
 make stop
 ```
